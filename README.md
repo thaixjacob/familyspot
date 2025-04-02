@@ -1,46 +1,159 @@
-# Getting Started with Create React App
+# FAMILYSPOT
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+FAMILYSPOT is a web application that helps families find and share child-friendly places in their community. The platform enables users to discover parks, restaurants, activities, and other venues suitable for children of different age groups.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Interactive map showing family-friendly places
+- Filtering by category, age group, amenities, and price range
+- User authentication system
+- Place verification by community members
+- Add new places to the map
+- User profiles with display name customization
 
-### `npm start`
+## Tech Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- React.js with TypeScript
+- Firebase (Authentication, Firestore, Hosting)
+- Google Maps API
+- Tailwind CSS for styling
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Development Workflow
 
-### `npm test`
+### Setup
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. Clone the repository
 
-### `npm run build`
+   ```bash
+   git clone https://github.com/thaixjacob/familyspot.git
+   cd familyspot
+   ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+2. Install dependencies
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+   ```bash
+   npm install
+   ```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. Create a `.env` file in the project root with your Google Maps API key
+   ```
+   REACT_APP_GOOGLE_MAPS_API_KEY=your_api_key_here
+   ```
 
-### `npm run eject`
+### Development Process
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+1. Start local development server
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+   ```bash
+   npm start
+   ```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+2. Make your changes to the codebase
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+3. Commit changes to Git
 
-## Learn More
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   git push
+   ```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+4. Deploy to development environment for testing
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+   ```bash
+   npm run deploy:dev
+   ```
+
+5. Test thoroughly in the development environment (https://familyspot-dev.web.app)
+
+6. When ready for production, deploy to the main site
+   ```bash
+   npm run deploy:prod
+   ```
+
+### Environment Management
+
+The project uses two Firebase hosting environments:
+
+- **Development** (`dev`): For testing changes before they go live
+
+  - URL: https://familyspot-dev.web.app
+  - Deploy command: `npm run deploy:dev`
+
+- **Production** (`prod`): The live website seen by users
+  - URL: https://familyspot.app
+  - Deploy command: `npm run deploy:prod`
+
+## Google Maps API Configuration
+
+1. The API key must have these APIs enabled:
+
+   - Maps JavaScript API
+   - Places API
+   - Geocoding API
+
+2. API key restrictions should include:
+   - HTTP referrers:
+     - `http://localhost:3000/*`
+     - `https://familyspot-dev.web.app/*`
+     - `https://familyspot.app/*`
+
+## Firebase Setup
+
+The project uses Firebase for backend services:
+
+- **Authentication**: Email/password and Google sign-in
+- **Firestore**: Database for places, users, and verifications
+- **Hosting**: For both dev and prod environments
+
+## Important Commands
+
+```bash
+# Local development
+npm start
+
+# Build the project
+npm run build
+
+# Deploy to development
+npm run deploy:dev
+
+# Deploy to production
+npm run deploy:prod
+
+# List Firebase projects
+firebase projects:list
+
+# Check Firebase hosting targets
+firebase target:apply hosting
+```
+
+## Custom Domain Setup
+
+When ready to connect the custom domain (familyspot.app):
+
+1. Add your domain to Firebase Hosting
+
+   ```bash
+   firebase hosting:sites:update familyspot-[project-id] --site familyspot.app
+   ```
+
+2. Verify domain ownership through Firebase Console
+
+3. Configure DNS records as instructed by Firebase
+
+4. Deploy to production
+
+   ```bash
+   npm run deploy:prod
+   ```
+
+5. Wait for SSL certificates to provision (may take a few hours)
+
+## License
+
+[Without license for now]
+
+## Contact
+
+tjlannes@gmail.com

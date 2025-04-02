@@ -10,6 +10,7 @@
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
     "firebase": "^11.5.0",
+    "husky": "^9.1.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.4.1",
@@ -23,7 +24,17 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "deploy:dev": "npm run build && firebase deploy --only hosting:dev",
-    "deploy:prod": "npm run build && firebase deploy --only hosting:prod"
+    "deploy:prod": "npm run build && firebase deploy --only hosting:prod",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css,scss,json}\"",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   },
   "eslintConfig": {
     "extends": [
@@ -44,8 +55,17 @@
     ]
   },
   "devDependencies": {
+    "@babel/plugin-transform-private-property-in-object": "^7.25.9",
+    "@eslint/js": "^9.13.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
-    "@testing-library/user-event": "^14.6.1"
+    "@testing-library/user-event": "^14.6.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.2",
+    "globals": "^15.11.0",
+    "lint-staged": "^15.2.10",
+    "prettier": "3.3.3",
+    "typescript-eslint": "^8.11.0"
   }
 }

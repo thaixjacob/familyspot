@@ -1,5 +1,5 @@
-import React from "react";
-import { Place } from "../../types/Place"; // Adjust the path as needed
+import React from 'react';
+import { Place } from '../../types/Place'; // Adjust the path as needed
 
 const PlaceCard = ({ place }: { place: Place }) => {
   return (
@@ -12,7 +12,7 @@ const PlaceCard = ({ place }: { place: Place }) => {
         <span className="text-green-700 font-medium">{place.priceRange}</span>
       </div>
       <div className="flex flex-wrap gap-1 mb-3">
-        {place.ageGroups.map((age) => (
+        {place.ageGroups.map(age => (
           <span
             key={age}
             className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
@@ -23,34 +23,22 @@ const PlaceCard = ({ place }: { place: Place }) => {
       </div>
       <div className="flex space-x-2 mb-3">
         {place.amenities.changingTables && (
-          <span
-            className="text-gray-700 bg-gray-100 rounded-full p-1.5"
-            title="Changing Tables"
-          >
+          <span className="text-gray-700 bg-gray-100 rounded-full p-1.5" title="Changing Tables">
             🚼
           </span>
         )}
         {place.amenities.playAreas && (
-          <span
-            className="text-gray-700 bg-gray-100 rounded-full p-1.5"
-            title="Play Areas"
-          >
+          <span className="text-gray-700 bg-gray-100 rounded-full p-1.5" title="Play Areas">
             🎮
           </span>
         )}
         {place.amenities.highChairs && (
-          <span
-            className="text-gray-700 bg-gray-100 rounded-full p-1.5"
-            title="High Chairs"
-          >
+          <span className="text-gray-700 bg-gray-100 rounded-full p-1.5" title="High Chairs">
             🪑
           </span>
         )}
         {place.amenities.accessibility && (
-          <span
-            className="text-gray-700 bg-gray-100 rounded-full p-1.5"
-            title="Accessibility"
-          >
+          <span className="text-gray-700 bg-gray-100 rounded-full p-1.5" title="Accessibility">
             ♿
           </span>
         )}
@@ -71,7 +59,7 @@ const PlaceCard = ({ place }: { place: Place }) => {
               ></path>
             </svg>
             Verified by {place.verifications} community member
-            {place.verifications !== 1 ? "s" : ""}
+            {place.verifications !== 1 ? 's' : ''}
           </span>
         ) : (
           <span className="text-gray-500">Not yet verified by community</span>

@@ -1,5 +1,6 @@
-import { Navigate, useLocation } from "react-router-dom";
-import { useUser } from "../../contexts/UserContext";
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useUser } from '../../contexts/UserContext';
 
 interface PrivateRouteProps {
   children: React.ReactNode;

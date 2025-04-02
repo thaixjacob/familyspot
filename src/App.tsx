@@ -1,24 +1,22 @@
-import React, { useState, useEffect } from "react";
-import {
-  Routes,
-  Route,
-  Link,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
-import Map from "./components/Map/Map";
-import FilterPanel from "./components/Filters/FilterPanel";
-import PlaceCard from "./components/Places/PlaceCard";
-import SignUp from "./components/Auth/SignUp";
-import Login from "./components/Auth/Login";
-import { Place } from "./types/Place";
-import { signOut } from "firebase/auth";
-import { auth } from "./firebase/config";
-import { UserProvider } from "./contexts/UserContext";
-import { useUser } from "./contexts/UserContext";
-import { getDoc, doc, collection, getDocs } from "firebase/firestore";
-import { db } from "./firebase/config";
-import PrivateRoute from "./components/Auth/PrivateRoute";
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import Map from './components/Map/Map';
+import FilterPanel, { FilterValues } from './components/Filters/FilterPanel';
+import PlaceCard from './components/Places/PlaceCard';
+import SignUp from './components/Auth/SignUp';
+import Login from './components/Auth/Login';
+import { Place } from './types/Place';
+import { signOut } from 'firebase/auth';
+import { auth } from './firebase/config';
+import { UserProvider } from './contexts/UserContext';
+import { useUser } from './contexts/UserContext';
+import { getDoc, doc, collection, getDocs } from 'firebase/firestore';
+import { db } from './firebase/config';
+import PrivateRoute from './components/Auth/PrivateRoute';
+import { NotificationProvider } from './contexts/NotificationContext';
+import NotificationToast from './components/Notifications/NotificationToast';
+import { useNotification } from './contexts/NotificationContext';
+import NotificationService from './services/notificationService';
 
 function AppContent() {
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
@@ -29,15 +27,16 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { dispatch, state } = useUser();
+  const { addNotification } = useNotification();
 
   // Buscar lugares do Firestore
   useEffect(() => {
     const fetchPlaces = async () => {
       try {
         setIsLoading(true);
-        const placesCollection = collection(db, "places");
+        const placesCollection = collection(db, 'places');
         const placesSnapshot = await getDocs(placesCollection);
-        const placesList: Place[] = placesSnapshot.docs.map((doc) => {
+        const placesList: Place[] = placesSnapshot.docs.map(doc => {
           const data = doc.data();
           return {
             ...data,
@@ -50,7 +49,10 @@ function AppContent() {
         setAllPlaces(placesList);
         setFilteredPlaces(placesList);
       } catch (error) {
-        console.error("Erro ao buscar lugares:", error);
+        NotificationService.error(
+          'Erro ao buscar lugares',
+          error instanceof Error ? { message: error.message } : String(error)
+        );
       } finally {
         setIsLoading(false);
       }
@@ -61,35 +63,45 @@ function AppContent() {
 
   // Monitorar estado de autenticação
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = auth.onAuthStateChanged(async user => {
       setUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
         const userData = userDoc.data();
         dispatch({
-          type: "LOGIN",
+          type: 'LOGIN',
           payload: {
-            displayName: userData?.displayName || "",
-            email: user.email || "",
+            displayName: userData?.displayName || '',
+            email: user.email || '',
           },
         });
       } else {
-        dispatch({ type: "LOGOUT" });
+        dispatch({ type: 'LOGOUT' });
       }
     });
 
     return () => unsubscribe();
   }, [dispatch]);
 
+  useEffect(() => {
+    NotificationService.initialize((type, message, details) => {
+      addNotification(type as 'info' | 'success' | 'warning' | 'error', message, details);
+    });
+  }, [addNotification]);
+
   const handleLogout = async () => {
     try {
       setUser(null);
       setShowWelcome(false);
-      dispatch({ type: "LOGOUT" });
+      dispatch({ type: 'LOGOUT' });
       await signOut(auth);
-      navigate("/");
+      navigate('/');
+      NotificationService.success('Logout realizado com sucesso');
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
+      NotificationService.error(
+        'Erro ao fazer logout',
+        error instanceof Error ? { message: error.message } : String(error)
+      );
       setUser(auth.currentUser);
     }
   };
@@ -102,29 +114,24 @@ function AppContent() {
   }, [location, user]);
 
   // Handle filtering
-  const handleFilter = (filters: any) => {
-    console.log("Applied filters:", filters);
+  const handleFilter = (filters: FilterValues) => {
+    NotificationService.debug('Filtros aplicados', { ...filters });
 
     // Filter the places based on the selected criteria
-    const filtered = allPlaces.filter((place) => {
+    const filtered = allPlaces.filter(place => {
       // Filter by category
-      if (filters.category !== "all" && place.category !== filters.category) {
+      if (filters.category !== 'all' && place.category !== filters.category) {
         return false;
       }
 
       // Filter by age groups
       if (filters.ageGroups.length > 0) {
-        const hasMatchingAgeGroup = place.ageGroups.some((age) =>
-          filters.ageGroups.includes(age)
-        );
+        const hasMatchingAgeGroup = place.ageGroups.some(age => filters.ageGroups.includes(age));
         if (!hasMatchingAgeGroup) return false;
       }
 
       // Filter by price range
-      if (
-        filters.priceRange.length > 0 &&
-        !filters.priceRange.includes(place.priceRange)
-      ) {
+      if (filters.priceRange.length > 0 && !filters.priceRange.includes(place.priceRange)) {
         return false;
       }
 
@@ -143,8 +150,8 @@ function AppContent() {
 
   // Função para adicionar um novo lugar
   const handlePlaceAdded = (newPlace: Place) => {
-    setAllPlaces((prev) => [...prev, newPlace]);
-    setFilteredPlaces((prev) => [...prev, newPlace]);
+    setAllPlaces(prev => [...prev, newPlace]);
+    setFilteredPlaces(prev => [...prev, newPlace]);
   };
 
   const MainContent = () => (
@@ -182,7 +189,7 @@ function AppContent() {
           <div className="mt-2 bg-blue-500 p-2 rounded-md text-sm animate-fade-in flex justify-between items-center">
             <span>
               Bem-vindo ao FamilySpot
-              {state.displayName ? `, ${state.displayName}` : ""}! 🎉
+              {state.displayName ? `, ${state.displayName}` : ''}! 🎉
             </span>
             <button
               onClick={() => setShowWelcome(false)}
@@ -210,7 +217,7 @@ function AppContent() {
               </div>
             ) : filteredPlaces.length > 0 ? (
               <div className="space-y-4">
-                {filteredPlaces.map((place) => (
+                {filteredPlaces.map(place => (
                   <PlaceCard key={place.id} place={place} />
                 ))}
               </div>
@@ -249,7 +256,10 @@ function AppContent() {
 function App() {
   return (
     <UserProvider>
-      <AppContent />
+      <NotificationProvider>
+        <AppContent />
+        <NotificationToast />
+      </NotificationProvider>
     </UserProvider>
   );
 }

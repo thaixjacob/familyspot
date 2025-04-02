@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Regex to check the format `type(scope): message`
+pattern="^(feat|fix|docs|style|refactor|test|chore)(\([a-z]+\))?: .{1,}"
+
+while read line; do
+    # Skip comments
+    if [ "${line:0:1}" == "#" ]; then
+        continue
+    fi
+    
+    # Check if the commit message follows the `type(scope): message` format
+    if ! [[ $line =~ $pattern ]]; then
+        echo -e "\033[0;31mCommit message must follow the format: type(scope): message"
+        echo -e "\033[0;31mExample: feat(api): add support for new login feature"
+        exit 1
+    fi
+    
+    # Check the length of the commit message
+    if [ ${#line} -lt 10 ] || [ ${#line} -gt 72 ]; then
+        echo -e "\033[0;31mThe length of the message must be between 10 and 72 characters."
+        exit 1
+    fi
+done < "${1}"
+
+exit 0

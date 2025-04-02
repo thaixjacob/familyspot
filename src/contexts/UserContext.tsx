@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer } from "react";
+import React, { createContext, useContext, useReducer } from 'react';
 
 // Definir os tipos
 type UserState = {
@@ -8,8 +8,8 @@ type UserState = {
 };
 
 type UserAction =
-  | { type: "LOGIN"; payload: { displayName: string; email: string } }
-  | { type: "LOGOUT" };
+  | { type: 'LOGIN'; payload: { displayName: string; email: string } }
+  | { type: 'LOGOUT' };
 
 type UserContextType = {
   state: UserState;
@@ -29,14 +29,14 @@ const initialState: UserState = {
 // Reducer
 const userReducer = (state: UserState, action: UserAction): UserState => {
   switch (action.type) {
-    case "LOGIN":
+    case 'LOGIN':
       return {
         ...state,
         displayName: action.payload.displayName,
         email: action.payload.email,
         isAuthenticated: true,
       };
-    case "LOGOUT":
+    case 'LOGOUT':
       return initialState;
     default:
       return state;
@@ -44,23 +44,17 @@ const userReducer = (state: UserState, action: UserAction): UserState => {
 };
 
 // Provider Component
-export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(userReducer, initialState);
 
-  return (
-    <UserContext.Provider value={{ state, dispatch }}>
-      {children}
-    </UserContext.Provider>
-  );
+  return <UserContext.Provider value={{ state, dispatch }}>{children}</UserContext.Provider>;
 };
 
 // Hook personalizado para usar o contexto
 export const useUser = () => {
   const context = useContext(UserContext);
   if (context === undefined) {
-    throw new Error("useUser must be used within a UserProvider");
+    throw new Error('useUser must be used within a UserProvider');
   }
   return context;
 };

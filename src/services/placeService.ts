@@ -9,8 +9,8 @@ import {
   query,
   where,
   GeoPoint,
-} from "firebase/firestore";
-import { db } from "../firebase/config";
+} from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 // Interface for Place data
 interface Place {
@@ -38,9 +38,9 @@ interface Place {
 
 // Get all places
 export const getAllPlaces = async () => {
-  const placesCollection = collection(db, "places");
+  const placesCollection = collection(db, 'places');
   const placesSnapshot = await getDocs(placesCollection);
-  return placesSnapshot.docs.map((doc) => ({
+  return placesSnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   }));
@@ -48,13 +48,10 @@ export const getAllPlaces = async () => {
 
 // Get places by category
 export const getPlacesByCategory = async (category: string) => {
-  const placesCollection = collection(db, "places");
-  const placesQuery = query(
-    placesCollection,
-    where("category", "==", category)
-  );
+  const placesCollection = collection(db, 'places');
+  const placesQuery = query(placesCollection, where('category', '==', category));
   const placesSnapshot = await getDocs(placesQuery);
-  return placesSnapshot.docs.map((doc) => ({
+  return placesSnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   }));
@@ -62,13 +59,10 @@ export const getPlacesByCategory = async (category: string) => {
 
 // Get places by age group
 export const getPlacesByAgeGroup = async (ageGroup: string) => {
-  const placesCollection = collection(db, "places");
-  const placesQuery = query(
-    placesCollection,
-    where("ageGroups", "array-contains", ageGroup)
-  );
+  const placesCollection = collection(db, 'places');
+  const placesQuery = query(placesCollection, where('ageGroups', 'array-contains', ageGroup));
   const placesSnapshot = await getDocs(placesQuery);
-  return placesSnapshot.docs.map((doc) => ({
+  return placesSnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   }));
@@ -76,7 +70,7 @@ export const getPlacesByAgeGroup = async (ageGroup: string) => {
 
 // Add a new place
 export const addPlace = async (place: Place) => {
-  const placesCollection = collection(db, "places");
+  const placesCollection = collection(db, 'places');
   return await addDoc(placesCollection, {
     ...place,
     createdAt: new Date(),
@@ -87,11 +81,8 @@ export const addPlace = async (place: Place) => {
 };
 
 // Update an existing place
-export const updatePlace = async (
-  placeId: string,
-  placeData: Partial<Place>
-) => {
-  const placeRef = doc(db, "places", placeId);
+export const updatePlace = async (placeId: string, placeData: Partial<Place>) => {
+  const placeRef = doc(db, 'places', placeId);
   return await updateDoc(placeRef, {
     ...placeData,
     updatedAt: new Date(),
@@ -100,7 +91,7 @@ export const updatePlace = async (
 
 // Get a place by ID
 export const getPlaceById = async (placeId: string) => {
-  const placeRef = doc(db, "places", placeId);
+  const placeRef = doc(db, 'places', placeId);
   const placeSnap = await getDoc(placeRef);
 
   if (placeSnap.exists()) {
@@ -109,6 +100,6 @@ export const getPlaceById = async (placeId: string) => {
       ...placeSnap.data(),
     };
   } else {
-    throw new Error("Place not found");
+    throw new Error('Place not found');
   }
 };

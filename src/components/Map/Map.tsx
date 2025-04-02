@@ -1,19 +1,15 @@
-import React, { useState, useCallback, useRef } from "react";
-import {
-  GoogleMap,
-  useLoadScript,
-  Marker,
-  InfoWindow,
-} from "@react-google-maps/api";
-import { Place } from "../../types/Place";
-import { useUser } from "../../contexts/UserContext";
-import { db } from "../../firebase/config";
-import { collection, addDoc } from "firebase/firestore";
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { Place } from '../../types/Place';
+import { useUser } from '../../contexts/UserContext';
+import { db } from '../../firebase/config';
+import { collection, addDoc } from 'firebase/firestore';
+import NotificationService from '../../services/notificationService';
 
 // Keep this as inline styles for Google Maps
 const mapContainerStyle = {
-  width: "100%",
-  height: "100vh",
+  width: '100%',
+  height: '100vh',
 };
 
 const center = {
@@ -22,7 +18,7 @@ const center = {
 };
 
 // Bibliotecas necessárias para o Google Maps
-const libraries = ["places"];
+const libraries = ['places'];
 
 interface MapProps {
   places: Place[];
@@ -37,20 +33,13 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     address: string;
     place_id: string;
   } | null>(null);
-  const [newPlaceCategory, setNewPlaceCategory] = useState("");
-  const [newPlaceAgeGroups, setNewPlaceAgeGroups] = useState<string[]>([
-    "0-1",
-    "1-3",
-    "3-5",
-    "5+",
-  ]);
-  const [newPlacePriceRange, setNewPlacePriceRange] = useState("$");
-  const [newPlaceActivityType, setNewPlaceActivityType] = useState("outdoor");
+  const [newPlaceCategory, setNewPlaceCategory] = useState('');
+  const [newPlaceAgeGroups, setNewPlaceAgeGroups] = useState<string[]>(['0-1', '1-3', '3-5', '5+']);
+  const [newPlacePriceRange, setNewPlacePriceRange] = useState('$');
+  const [newPlaceActivityType, setNewPlaceActivityType] = useState('outdoor');
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false);
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(
-    null
-  );
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const { state: userState } = useUser();
   const [categoryDetected, setCategoryDetected] = useState(false);
   const [newPlaceAmenities, setNewPlaceAmenities] = useState({
@@ -61,11 +50,14 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   });
   // Adicionar estados para nome personalizado
   const [isCustomNameRequired, setIsCustomNameRequired] = useState(false);
-  const [customPlaceName, setCustomPlaceName] = useState("");
+  const [customPlaceName, setCustomPlaceName] = useState('');
 
-  if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
-    console.error("Google Maps API key is missing!");
-  }
+  useEffect(() => {
+    if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
+      NotificationService.error('Google Maps API key is missing!');
+      return;
+    }
+  }, []);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
@@ -78,10 +70,10 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
   // Função para mapear tipos do Google Places para suas categorias
   const mapGoogleTypesToCategory = (types: string[]): string | null => {
-    if (types.includes("park")) return "parks";
-    if (types.includes("restaurant")) return "restaurants";
-    if (types.includes("cafe")) return "cafes";
-    if (types.includes("playground")) return "playgrounds";
+    if (types.includes('park')) return 'parks';
+    if (types.includes('restaurant')) return 'restaurants';
+    if (types.includes('cafe')) return 'cafes';
+    if (types.includes('playground')) return 'playgrounds';
     // Retorna null se não encontrar correspondência
     return null;
   };
@@ -103,12 +95,20 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         const request = {
           location: new google.maps.LatLng(clickedLat, clickedLng),
           rankBy: google.maps.places.RankBy.DISTANCE,
-          type: "establishment", // Alterado de ["establishment"] para "establishment"
+          type: 'establishment', // Alterado de ["establishment"] para "establishment"
         };
 
         placesServiceRef.current.nearbySearch(request, (results, status) => {
-          console.log("Resultados da busca:", results);
-          console.log("Status da busca:", status);
+          NotificationService.debug(
+            'Resultados da busca:',
+            results
+              ? {
+                  count: results.length,
+                  places: results.map(p => ({ name: p.name, place_id: p.place_id })),
+                }
+              : undefined
+          );
+          NotificationService.debug('Status da busca:', status);
 
           if (
             status === google.maps.places.PlacesServiceStatus.OK &&
@@ -117,38 +117,38 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
           ) {
             // Pegar o primeiro resultado (o mais próximo)
             const place = results[0];
-            console.log("Nome do estabelecimento encontrado:", place.name);
+            NotificationService.debug('Nome do estabelecimento encontrado:', place.name);
 
             // 2. Buscar detalhes completos
             placesServiceRef.current?.getDetails(
               {
                 placeId: place.place_id as string,
                 // Solicitar mais campos para garantir que temos todas as informações necessárias
-                fields: [
-                  "name",
-                  "formatted_address",
-                  "place_id",
-                  "types",
-                  "business_status",
-                ],
+                fields: ['name', 'formatted_address', 'place_id', 'types', 'business_status'],
               },
               (placeDetails, detailsStatus) => {
                 setIsLoadingPlaceDetails(false);
-                console.log("Detalhes do estabelecimento:", placeDetails);
-
-                if (
-                  detailsStatus === google.maps.places.PlacesServiceStatus.OK &&
+                NotificationService.debug(
+                  'Detalhes do estabelecimento:',
                   placeDetails
-                ) {
+                    ? {
+                        name: placeDetails.name,
+                        address: placeDetails.formatted_address,
+                        place_id: placeDetails.place_id,
+                      }
+                    : undefined
+                );
+
+                if (detailsStatus === google.maps.places.PlacesServiceStatus.OK && placeDetails) {
                   // 3. IMPORTANTE: Usar o nome do estabelecimento diretamente
                   // Garantir que estamos usando o nome correto do estabelecimento
-                  const placeName = placeDetails.name || place.name || "";
-                  console.log("Nome final usado:", placeName);
+                  const placeName = placeDetails.name || place.name || '';
+                  NotificationService.debug('Nome final usado:', placeName);
 
                   setNewPlaceDetails({
                     name: placeName, // Usar o nome diretamente, sem condições
-                    address: placeDetails.formatted_address || "",
-                    place_id: placeDetails.place_id || "",
+                    address: placeDetails.formatted_address || '',
+                    place_id: placeDetails.place_id || '',
                   });
 
                   // Não precisamos mais verificar se o nome é igual ao endereço
@@ -163,7 +163,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                     setCategoryDetected(true);
                   } else {
                     // Não definimos uma categoria padrão
-                    setNewPlaceCategory("");
+                    setNewPlaceCategory('');
                     setCategoryDetected(false);
                   }
                 }
@@ -178,13 +178,13 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             geocoder.geocode(
               { location: { lat: clickedLat, lng: clickedLng } },
               (results, status) => {
-                if (status === "OK" && results && results.length > 0) {
+                if (status === 'OK' && results && results.length > 0) {
                   // Neste caso, não temos um nome de estabelecimento, então criamos um campo vazio
                   // para que o usuário possa digitar o nome
                   setNewPlaceDetails({
-                    name: "",
-                    address: results[0].formatted_address || "",
-                    place_id: "",
+                    name: '',
+                    address: results[0].formatted_address || '',
+                    place_id: '',
                   });
 
                   // Aqui SIM precisamos solicitar um nome personalizado
@@ -211,7 +211,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     try {
       const newPlace = {
         name: isCustomNameRequired ? customPlaceName : newPlaceDetails.name,
-        description: "", // Campo vazio, pode ser preenchido posteriormente
+        description: '', // Campo vazio, pode ser preenchido posteriormente
         address: newPlaceDetails.address,
         location: {
           latitude: newPin.lat,
@@ -224,17 +224,17 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         amenities: newPlaceAmenities,
         verifications: 0,
         verifiedBy: [],
-        createdBy: userState.email || "anonymous",
+        createdBy: userState.email || 'anonymous',
         createdAt: new Date(),
         updatedAt: new Date(),
         activityType: newPlaceActivityType,
       };
 
-      console.log("Salvando local:", newPlace);
+      NotificationService.debug('Salvando local:', newPlace);
 
       // Adicionar ao Firestore
-      const docRef = await addDoc(collection(db, "places"), newPlace);
-      console.log("Local salvo com ID:", docRef.id);
+      const docRef = await addDoc(collection(db, 'places'), newPlace);
+      NotificationService.debug('Local salvo com ID:', docRef.id);
 
       // Adicionar o ID gerado pelo Firestore
       const placeWithId = { ...newPlace, id: docRef.id };
@@ -247,10 +247,10 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       // Reset all form fields
       setNewPin(null);
       setNewPlaceDetails(null);
-      setNewPlaceCategory("");
-      setNewPlaceAgeGroups(["0-1", "1-3", "3-5", "5+"]);
-      setNewPlacePriceRange("$");
-      setNewPlaceActivityType("outdoor");
+      setNewPlaceCategory('');
+      setNewPlaceAgeGroups(['0-1', '1-3', '3-5', '5+']);
+      setNewPlacePriceRange('$');
+      setNewPlaceActivityType('outdoor');
       setNewPlaceAmenities({
         changingTables: false,
         playAreas: false,
@@ -260,12 +260,15 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       setIsAddingPlace(false);
       setCategoryDetected(false);
       setIsCustomNameRequired(false);
-      setCustomPlaceName("");
+      setCustomPlaceName('');
 
-      alert("Local adicionado com sucesso!");
+      NotificationService.success('Local adicionado com sucesso!');
     } catch (error) {
-      console.error("Erro ao adicionar local:", error);
-      alert("Erro ao adicionar local. Tente novamente.");
+      NotificationService.error(
+        'Erro ao adicionar local:',
+        error instanceof Error ? { message: error.message } : String(error)
+      );
+      NotificationService.error('Erro ao adicionar local. Tente novamente.');
     }
   };
 
@@ -308,7 +311,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         onClick={handleMapClick}
         onLoad={onMapLoad}
       >
-        {places.map((place) => (
+        {places.map(place => (
           <Marker
             key={place.id}
             position={{
@@ -324,7 +327,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             position={newPin}
             animation={google.maps.Animation.DROP}
             icon={{
-              url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+              url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
             }}
           />
         )}
@@ -353,26 +356,21 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             disabled={!userState.isAuthenticated}
           >
-            {userState.isAuthenticated
-              ? "Adicionar Local"
-              : "Faça login para adicionar"}
+            {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
           </button>
         ) : (
           <div className="space-y-3">
             <h3 className="font-bold">Adicionar Novo Local</h3>
             <p className="text-sm text-gray-600">
               Clique no mapa para selecionar um local
-              {isLoadingPlaceDetails && " (Carregando detalhes...)"}
+              {isLoadingPlaceDetails && ' (Carregando detalhes...)'}
             </p>
 
             {newPlaceDetails && (
               <div className="bg-gray-100 p-2 rounded mb-3">
                 {isCustomNameRequired ? (
                   <div className="mb-2">
-                    <label
-                      htmlFor="custom-name"
-                      className="block text-sm text-gray-600 mb-1"
-                    >
+                    <label htmlFor="custom-name" className="block text-sm text-gray-600 mb-1">
                       Nome do Local <span className="text-red-500">*</span>
                       <span className="text-orange-500 text-xs ml-2">
                         (Forneça um nome para este local)
@@ -383,7 +381,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                       type="text"
                       className="w-full p-2 border rounded"
                       value={customPlaceName}
-                      onChange={(e) => setCustomPlaceName(e.target.value)}
+                      onChange={e => setCustomPlaceName(e.target.value)}
                       placeholder="Ex: Café Familiar, Parque Infantil, etc."
                       required
                     />
@@ -391,17 +389,12 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                 ) : (
                   <h4 className="font-semibold">{newPlaceDetails.name}</h4>
                 )}
-                <p className="text-sm text-gray-600">
-                  {newPlaceDetails.address}
-                </p>
+                <p className="text-sm text-gray-600">{newPlaceDetails.address}</p>
               </div>
             )}
 
             <div>
-              <label
-                htmlFor="place-category"
-                className="block text-sm text-gray-600 mb-1"
-              >
+              <label htmlFor="place-category" className="block text-sm text-gray-600 mb-1">
                 Categoria <span className="text-red-500">*</span>
                 {!categoryDetected && newPlaceDetails && (
                   <span className="text-orange-500 text-xs ml-2">
@@ -412,12 +405,10 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
               <select
                 id="place-category"
                 className={`w-full p-2 border rounded mb-2 ${
-                  !categoryDetected && newPlaceDetails
-                    ? "border-orange-400 bg-orange-50"
-                    : ""
+                  !categoryDetected && newPlaceDetails ? 'border-orange-400 bg-orange-50' : ''
                 }`}
                 value={newPlaceCategory}
-                onChange={(e) => {
+                onChange={e => {
                   setNewPlaceCategory(e.target.value);
                   setCategoryDetected(true); // Uma vez que o usuário escolhe, consideramos como "detectado"
                 }}
@@ -434,17 +425,14 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                 <option value="restaurants">Restaurantes</option>
               </select>
 
-              <label
-                htmlFor="place-price"
-                className="block text-sm text-gray-600 mb-1"
-              >
+              <label htmlFor="place-price" className="block text-sm text-gray-600 mb-1">
                 Faixa de preço <span className="text-red-500">*</span>
               </label>
               <select
                 id="place-price"
                 className="w-full p-2 border rounded mb-2"
                 value={newPlacePriceRange}
-                onChange={(e) => setNewPlacePriceRange(e.target.value)}
+                onChange={e => setNewPlacePriceRange(e.target.value)}
                 aria-label="Faixa de preço"
               >
                 <option value="$">$ (Econômico)</option>
@@ -454,17 +442,14 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                 <option value="free">Gratuito</option>
               </select>
 
-              <label
-                htmlFor="place-activity"
-                className="block text-sm text-gray-600 mb-1"
-              >
+              <label htmlFor="place-activity" className="block text-sm text-gray-600 mb-1">
                 Tipo de atividade <span className="text-red-500">*</span>
               </label>
               <select
                 id="place-activity"
                 className="w-full p-2 border rounded mb-2"
                 value={newPlaceActivityType}
-                onChange={(e) => setNewPlaceActivityType(e.target.value)}
+                onChange={e => setNewPlaceActivityType(e.target.value)}
                 aria-label="Tipo de atividade"
               >
                 <option value="indoor">Ambiente fechado</option>
@@ -477,19 +462,17 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                   Faixas etárias <span className="text-red-500">*</span>
                 </legend>
                 <div className="grid grid-cols-2 gap-1">
-                  {["0-1", "1-3", "3-5", "5+"].map((age) => (
+                  {['0-1', '1-3', '3-5', '5+'].map(age => (
                     <label key={age} className="flex items-center">
                       <input
                         type="checkbox"
                         className="mr-2"
                         checked={newPlaceAgeGroups.includes(age)}
-                        onChange={(e) => {
+                        onChange={e => {
                           if (e.target.checked) {
                             setNewPlaceAgeGroups([...newPlaceAgeGroups, age]);
                           } else {
-                            setNewPlaceAgeGroups(
-                              newPlaceAgeGroups.filter((a) => a !== age)
-                            );
+                            setNewPlaceAgeGroups(newPlaceAgeGroups.filter(a => a !== age));
                           }
                         }}
                       />
@@ -500,16 +483,14 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
               </fieldset>
 
               <fieldset className="mb-2">
-                <legend className="block text-sm text-gray-600 mb-1">
-                  Comodidades
-                </legend>
+                <legend className="block text-sm text-gray-600 mb-1">Comodidades</legend>
                 <div className="grid grid-cols-2 gap-1">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
                       className="mr-2"
                       checked={newPlaceAmenities.changingTables}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNewPlaceAmenities({
                           ...newPlaceAmenities,
                           changingTables: e.target.checked,
@@ -523,7 +504,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                       type="checkbox"
                       className="mr-2"
                       checked={newPlaceAmenities.playAreas}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNewPlaceAmenities({
                           ...newPlaceAmenities,
                           playAreas: e.target.checked,
@@ -537,7 +518,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                       type="checkbox"
                       className="mr-2"
                       checked={newPlaceAmenities.highChairs}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNewPlaceAmenities({
                           ...newPlaceAmenities,
                           highChairs: e.target.checked,
@@ -551,7 +532,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                       type="checkbox"
                       className="mr-2"
                       checked={newPlaceAmenities.accessibility}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNewPlaceAmenities({
                           ...newPlaceAmenities,
                           accessibility: e.target.checked,
@@ -571,7 +552,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                   setNewPin(null);
                   setNewPlaceDetails(null);
                   setIsCustomNameRequired(false);
-                  setCustomPlaceName("");
+                  setCustomPlaceName('');
                 }}
                 className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
               >
@@ -591,8 +572,8 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                   !newPlaceDetails ||
                   !newPlaceCategory ||
                   (isCustomNameRequired && !customPlaceName)
-                    ? "bg-blue-300 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                    ? 'bg-blue-300 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
                 Salvar

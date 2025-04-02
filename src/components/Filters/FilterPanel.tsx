@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 
-interface FilterValues {
+export interface FilterValues {
   category: string;
   ageGroups: string[];
   priceRange: string[];
@@ -12,12 +12,8 @@ interface FilterValues {
   };
 }
 
-const FilterPanel = ({
-  onFilter,
-}: {
-  onFilter: (filters: FilterValues) => void;
-}) => {
-  const [category, setCategory] = useState("all");
+const FilterPanel = ({ onFilter }: { onFilter: (filters: FilterValues) => void }) => {
+  const [category, setCategory] = useState('all');
   const [ageGroups, setAgeGroups] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState<string[]>([]);
   const [amenities, setAmenities] = useState({
@@ -28,23 +24,17 @@ const FilterPanel = ({
   });
 
   const handleAgeGroupChange = (age: string) => {
-    setAgeGroups(
-      ageGroups.includes(age)
-        ? ageGroups.filter((a) => a !== age)
-        : [...ageGroups, age]
-    );
+    setAgeGroups(ageGroups.includes(age) ? ageGroups.filter(a => a !== age) : [...ageGroups, age]);
   };
 
   const handlePriceRangeChange = (price: string) => {
     setPriceRange(
-      priceRange.includes(price)
-        ? priceRange.filter((p) => p !== price)
-        : [...priceRange, price]
+      priceRange.includes(price) ? priceRange.filter(p => p !== price) : [...priceRange, price]
     );
   };
 
   const handleAmenityChange = (
-    amenity: "changingTables" | "playAreas" | "highChairs" | "accessibility"
+    amenity: 'changingTables' | 'playAreas' | 'highChairs' | 'accessibility'
   ) => {
     setAmenities({
       ...amenities,
@@ -72,7 +62,7 @@ const FilterPanel = ({
         <select
           id="category-select"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={e => setCategory(e.target.value)}
           className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="all">All Categories</option>
@@ -87,7 +77,7 @@ const FilterPanel = ({
       <div className="mb-5">
         <h4 className="text-sm font-medium text-gray-700 mb-2">Age Groups</h4>
         <div className="space-y-2">
-          {["0-1", "1-3", "3-5", "5+"].map((age) => (
+          {['0-1', '1-3', '3-5', '5+'].map(age => (
             <label key={age} className="flex items-center">
               <input
                 type="checkbox"
@@ -104,14 +94,14 @@ const FilterPanel = ({
       <div className="mb-5">
         <h4 className="text-sm font-medium text-gray-700 mb-2">Price Range</h4>
         <div className="flex flex-wrap gap-2">
-          {["$", "$$", "$$$", "$$$$"].map((price) => (
+          {['$', '$$', '$$$', '$$$$'].map(price => (
             <button
               key={price}
               onClick={() => handlePriceRangeChange(price)}
               className={`px-3 py-1 text-sm border rounded-full ${
                 priceRange.includes(price)
-                  ? "bg-blue-100 border-blue-500 text-blue-700"
-                  : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
+                  ? 'bg-blue-100 border-blue-500 text-blue-700'
+                  : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
               }`}
             >
               {price}
@@ -127,7 +117,7 @@ const FilterPanel = ({
             <input
               type="checkbox"
               checked={amenities.changingTables}
-              onChange={() => handleAmenityChange("changingTables")}
+              onChange={() => handleAmenityChange('changingTables')}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700">Changing Tables</span>
@@ -136,7 +126,7 @@ const FilterPanel = ({
             <input
               type="checkbox"
               checked={amenities.playAreas}
-              onChange={() => handleAmenityChange("playAreas")}
+              onChange={() => handleAmenityChange('playAreas')}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700">Play Areas</span>
@@ -145,7 +135,7 @@ const FilterPanel = ({
             <input
               type="checkbox"
               checked={amenities.highChairs}
-              onChange={() => handleAmenityChange("highChairs")}
+              onChange={() => handleAmenityChange('highChairs')}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700">High Chairs</span>
@@ -154,7 +144,7 @@ const FilterPanel = ({
             <input
               type="checkbox"
               checked={amenities.accessibility}
-              onChange={() => handleAmenityChange("accessibility")}
+              onChange={() => handleAmenityChange('accessibility')}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700">Accessibility</span>

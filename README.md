@@ -18,6 +18,51 @@ FAMILYSPOT is a web application that helps families find and share child-friendl
 - Google Maps API
 - Tailwind CSS for styling
 
+## Development Setup
+
+### Available Scripts
+
+| Command | Description |
+|---------|-----------|
+| `npm start` | Start development server |
+| `npm run build` | Create production build |
+| `npm test` | Run tests |
+| `npm run lint` | Verify files with ESLint |
+| `npm run lint:fix` | Auto-fix ESLint issues |
+| `npm run format` | Format files with Prettier |
+| `npm run deploy:dev` | Build and deploy to dev environment |
+| `npm run deploy:prod` | Build and deploy to production |
+
+### Code Quality Standards
+
+This project uses ESLint and Prettier for code quality and consistency, with Husky for git hooks and lint-staged for pre-commit file validation.
+
+To manually fix all project files:
+```bash
+npm run lint:fix && npm run format
+```
+
+### Git Hooks (Husky)
+
+#### pre-commit
+- Checks for `console.*` references
+- Checks for `debugger` statements
+- Runs lint-staged to validate/fix files with ESLint and Prettier
+
+#### commit-msg
+Enforces Conventional Commits format:
+```
+type(scope): message
+```
+- **type**: must be one of: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, or `chore`
+- **scope**: (optional) indicates affected code area
+- **message**: must be 10-72 characters
+
+#### pre-push
+Validates branch naming:
+- Pattern: `type/feature-name`
+- Types: `feature`, `bugfix`, or `hotfix`
+
 ## Development Workflow
 
 ### Setup

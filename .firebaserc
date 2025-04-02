@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "familyspot-92cd1"
+  },
+  "targets": {
+    "familyspot-92cd1": {
+      "hosting": {
+        "dev": [
+          "familyspot-dev"
+        ],
+        "prod": [
+          "familyspot-92cd1"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

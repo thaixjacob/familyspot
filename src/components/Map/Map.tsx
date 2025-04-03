@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { Place } from '../../types/Place';
-import { useUser } from '../../contexts/UserContext';
+import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
 import { collection, addDoc } from 'firebase/firestore';
 import NotificationService from '../../services/notificationService';
@@ -18,7 +18,7 @@ const center = {
 };
 
 // Bibliotecas necessárias para o Google Maps
-const libraries = ['places'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places'];
 
 interface MapProps {
   places: Place[];
@@ -61,7 +61,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
-    libraries: libraries as any,
+    libraries: libraries as ('places' | 'drawing' | 'geometry' | 'visualization')[],
   });
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
@@ -91,25 +91,13 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       if (placesServiceRef.current) {
         setIsLoadingPlaceDetails(true);
 
-        // Corrigido: 'type' como string única em vez de array
         const request = {
           location: new google.maps.LatLng(clickedLat, clickedLng),
           rankBy: google.maps.places.RankBy.DISTANCE,
-          type: 'establishment', // Alterado de ["establishment"] para "establishment"
+          type: 'establishment',
         };
 
         placesServiceRef.current.nearbySearch(request, (results, status) => {
-          NotificationService.debug(
-            'Resultados da busca:',
-            results
-              ? {
-                  count: results.length,
-                  places: results.map(p => ({ name: p.name, place_id: p.place_id })),
-                }
-              : undefined
-          );
-          NotificationService.debug('Status da busca:', status);
-
           if (
             status === google.maps.places.PlacesServiceStatus.OK &&
             results &&
@@ -117,44 +105,28 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
           ) {
             // Pegar o primeiro resultado (o mais próximo)
             const place = results[0];
-            NotificationService.debug('Nome do estabelecimento encontrado:', place.name);
 
             // 2. Buscar detalhes completos
             placesServiceRef.current?.getDetails(
               {
                 placeId: place.place_id as string,
-                // Solicitar mais campos para garantir que temos todas as informações necessárias
                 fields: ['name', 'formatted_address', 'place_id', 'types', 'business_status'],
               },
               (placeDetails, detailsStatus) => {
                 setIsLoadingPlaceDetails(false);
-                NotificationService.debug(
-                  'Detalhes do estabelecimento:',
-                  placeDetails
-                    ? {
-                        name: placeDetails.name,
-                        address: placeDetails.formatted_address,
-                        place_id: placeDetails.place_id,
-                      }
-                    : undefined
-                );
 
                 if (detailsStatus === google.maps.places.PlacesServiceStatus.OK && placeDetails) {
                   // 3. IMPORTANTE: Usar o nome do estabelecimento diretamente
-                  // Garantir que estamos usando o nome correto do estabelecimento
                   const placeName = placeDetails.name || place.name || '';
-                  NotificationService.debug('Nome final usado:', placeName);
 
                   setNewPlaceDetails({
-                    name: placeName, // Usar o nome diretamente, sem condições
+                    name: placeName,
                     address: placeDetails.formatted_address || '',
                     place_id: placeDetails.place_id || '',
                   });
 
-                  // Não precisamos mais verificar se o nome é igual ao endereço
                   setIsCustomNameRequired(false);
 
-                  // Tentar mapear para as categorias disponíveis
                   const types = placeDetails.types || [];
                   const detectedCategory = mapGoogleTypesToCategory(types);
 
@@ -162,7 +134,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                     setNewPlaceCategory(detectedCategory);
                     setCategoryDetected(true);
                   } else {
-                    // Não definimos uma categoria padrão
                     setNewPlaceCategory('');
                     setCategoryDetected(false);
                   }
@@ -211,13 +182,13 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     try {
       const newPlace = {
         name: isCustomNameRequired ? customPlaceName : newPlaceDetails.name,
-        description: '', // Campo vazio, pode ser preenchido posteriormente
+        description: '',
         address: newPlaceDetails.address,
         location: {
           latitude: newPin.lat,
           longitude: newPin.lng,
         },
-        place_id: newPlaceDetails.place_id, // Importante para referência ao Google Places
+        place_id: newPlaceDetails.place_id,
         category: newPlaceCategory,
         ageGroups: newPlaceAgeGroups,
         priceRange: newPlacePriceRange,
@@ -230,11 +201,8 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         activityType: newPlaceActivityType,
       };
 
-      NotificationService.debug('Salvando local:', newPlace);
-
       // Adicionar ao Firestore
       const docRef = await addDoc(collection(db, 'places'), newPlace);
-      NotificationService.debug('Local salvo com ID:', docRef.id);
 
       // Adicionar o ID gerado pelo Firestore
       const placeWithId = { ...newPlace, id: docRef.id };

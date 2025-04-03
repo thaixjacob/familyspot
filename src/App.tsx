@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import Map from './components/Map/Map';
-import FilterPanel, { FilterValues } from './components/Filters/FilterPanel';
+import FilterPanel from './components/Filters/FilterPanel';
 import PlaceCard from './components/Places/PlaceCard';
 import SignUp from './components/Auth/SignUp';
 import Login from './components/Auth/Login';
 import { Place } from './types/Place';
 import { signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
-import { UserProvider } from './contexts/UserContext';
-import { useUser } from './contexts/UserContext';
+import { UserProvider } from './App/ContextProviders/UserContext';
+import { useUser } from './App/ContextProviders/UserContext';
 import { getDoc, doc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
 import PrivateRoute from './components/Auth/PrivateRoute';
-import { NotificationProvider } from './contexts/NotificationContext';
+import { NotificationProvider } from './App/ContextProviders/NotificationContext';
 import NotificationToast from './components/Notifications/NotificationToast';
-import { useNotification } from './contexts/NotificationContext';
+import { useNotification } from './App/ContextProviders/NotificationContext';
 import NotificationService from './services/notificationService';
+import { FilterProvider, useFilter } from './App/ContextProviders/FilterContext';
 
 function AppContent() {
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
@@ -28,6 +29,7 @@ function AppContent() {
   const navigate = useNavigate();
   const { dispatch, state } = useUser();
   const { addNotification } = useNotification();
+  const { filters } = useFilter();
 
   // Buscar lugares do Firestore
   useEffect(() => {
@@ -114,9 +116,7 @@ function AppContent() {
   }, [location, user]);
 
   // Handle filtering
-  const handleFilter = (filters: FilterValues) => {
-    NotificationService.debug('Filtros aplicados', { ...filters });
-
+  useEffect(() => {
     // Filter the places based on the selected criteria
     const filtered = allPlaces.filter(place => {
       // Filter by category
@@ -146,7 +146,7 @@ function AppContent() {
     });
 
     setFilteredPlaces(filtered);
-  };
+  }, [filters, allPlaces]);
 
   // Função para adicionar um novo lugar
   const handlePlaceAdded = (newPlace: Place) => {
@@ -204,7 +204,7 @@ function AppContent() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar with filters and place cards */}
         <div className="w-96 bg-gray-50 p-4 overflow-y-auto flex flex-col">
-          <FilterPanel onFilter={handleFilter} />
+          <FilterPanel />
 
           <div className="mt-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">
@@ -257,7 +257,9 @@ function App() {
   return (
     <UserProvider>
       <NotificationProvider>
-        <AppContent />
+        <FilterProvider>
+          <AppContent />
+        </FilterProvider>
         <NotificationToast />
       </NotificationProvider>
     </UserProvider>

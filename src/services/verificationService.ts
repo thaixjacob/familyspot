@@ -1,5 +1,17 @@
-import { doc, updateDoc, arrayUnion, increment, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  increment,
+  arrayUnion,
+} from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { Verification } from '../types';
 
 // Verify a place
 export const verifyPlace = async (placeId: string, userId: string) => {
@@ -35,4 +47,46 @@ export const getVerificationCount = async (placeId: string) => {
   }
 
   return placeSnap.data().verifications || 0;
+};
+
+export const VerificationService = {
+  async getVerificationsByPlaceId(placeId: string): Promise<Verification[]> {
+    const verificationsRef = collection(db, 'verifications');
+    const q = query(verificationsRef, where('placeId', '==', placeId));
+    const verificationsSnapshot = await getDocs(q);
+    return verificationsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Verification[];
+  },
+
+  async getVerificationsByUserId(userId: string): Promise<Verification[]> {
+    const verificationsRef = collection(db, 'verifications');
+    const q = query(verificationsRef, where('userId', '==', userId));
+    const verificationsSnapshot = await getDocs(q);
+    return verificationsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Verification[];
+  },
+
+  async addVerification(verification: Omit<Verification, 'id'>): Promise<string> {
+    const docRef = await addDoc(collection(db, 'verifications'), verification);
+    return docRef.id;
+  },
+
+  async updateVerificationStatus(
+    id: string,
+    status: Verification['status'],
+    comment?: string
+  ): Promise<void> {
+    const verificationRef = doc(db, 'verifications', id);
+    const verificationDoc = await getDoc(verificationRef);
+    if (!verificationDoc.exists()) throw new Error('Verification not found');
+
+    await updateDoc(verificationRef, {
+      status,
+      ...(comment && { comment }),
+    });
+  },
 };

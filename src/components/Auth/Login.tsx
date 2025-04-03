@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../firebase/config';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
 import { useUser } from '../../App/ContextProviders/UserContext';
+import AuthService from '../../App/Services/AuthService';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -14,31 +12,27 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { dispatch } = useUser();
+  const authService = AuthService.getInstance();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
       setLoading(true);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-
-      // Buscar dados do usuário no Firestore
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      const userData = userDoc.data();
+      const response = await authService.login({ email, password });
 
       dispatch({
         type: 'LOGIN',
         payload: {
-          displayName: userData?.displayName || '',
-          email: userCredential.user.email || '',
+          displayName: response.user.displayName || '',
+          email: response.user.email || '',
         },
       });
 
-      // Navega para a página que o usuário tentou acessar originalmente
       navigate(from, {
         state: {
           showWelcome: true,
-          displayName: userData?.displayName,
+          displayName: response.user.displayName,
         },
         replace: true,
       });

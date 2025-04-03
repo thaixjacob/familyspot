@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../../App/ContextProviders/UserContext';
+import AuthService from '../../App/Services/AuthService';
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -15,38 +13,29 @@ const SignUp = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { dispatch } = useUser();
+  const authService = AuthService.getInstance();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
       setLoading(true);
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-
-      // Determine display name (use nickname if provided, otherwise use firstName)
       const displayName = nickname.trim() || firstName;
 
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        firstName,
-        lastName,
-        displayName,
+      const response = await authService.signUp({
+        name: displayName,
         email,
-        createdAt: new Date(),
-        role: 'user',
-        favorites: [],
+        password,
       });
 
       dispatch({
         type: 'LOGIN',
         payload: {
           displayName,
-          email: userCredential.user.email || '',
+          email: response.user.email || '',
         },
       });
 
-      // Navegar com o displayName
       navigate('/', {
         state: {
           showWelcome: true,

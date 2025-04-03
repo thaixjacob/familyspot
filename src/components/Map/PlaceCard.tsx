@@ -2,7 +2,7 @@ import React from 'react';
 import { Place } from '@/types/Place';
 import { useVerification } from '@/hooks/useVerification';
 import { useAuth } from '@/hooks/useAuth';
-import NotificationService from '@/services/notificationService';
+import NotificationService from '@/App/Services/notificationService';
 
 interface PlaceCardProps {
   place: Place;

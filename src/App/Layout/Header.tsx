@@ -24,7 +24,7 @@ import { useUser } from '../../App/ContextProviders/UserContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
-import NotificationService from '../../services/notificationService';
+import NotificationService from '../Services/notificationService';
 
 interface HeaderProps {
   showWelcome: boolean;

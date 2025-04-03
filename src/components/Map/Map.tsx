@@ -4,8 +4,7 @@ import { Place } from '../../types/Place';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
 import { collection, addDoc } from 'firebase/firestore';
-import NotificationService from '../../services/notificationService';
-
+import NotificationService from '../../App/Services/notificationService';
 // Keep this as inline styles for Google Maps
 const mapContainerStyle = {
   width: '100%',

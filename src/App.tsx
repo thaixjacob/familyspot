@@ -10,7 +10,7 @@ import PrivateRoute from './components/Auth/PrivateRoute';
 import { NotificationProvider } from './App/ContextProviders/NotificationContext';
 import NotificationToast from './components/Notifications/NotificationToast';
 import { useNotification } from './App/ContextProviders/NotificationContext';
-import NotificationService from './services/notificationService';
+import NotificationService from './App/Services/notificationService';
 import { FilterProvider, useFilter } from './App/ContextProviders/FilterContext';
 import SignUp from './components/Auth/SignUp';
 import Login from './components/Auth/Login';

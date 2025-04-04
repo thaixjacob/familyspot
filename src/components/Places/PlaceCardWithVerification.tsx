@@ -3,6 +3,7 @@ import { Place } from '@/types/Place';
 import { useVerification } from '@/hooks/useVerification';
 import { useAuth } from '@/hooks/useAuth';
 import NotificationService from '@/App/Services/notificationService';
+import LoadingSpinner from '@/SharedComponents/Loading/LoadingSpinner';
 
 interface PlaceCardWithVerificationProps {
   place: Place;
@@ -92,9 +93,16 @@ const PlaceCardWithVerification: React.FC<PlaceCardWithVerificationProps> = ({
         <button
           onClick={handleVerify}
           disabled={loading}
-          className="mt-4 w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="mt-4 w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
         >
-          {loading ? 'Verificando...' : 'Verificar Local'}
+          {loading ? (
+            <div className="flex items-center space-x-2">
+              <LoadingSpinner size="sm" color="text-white" />
+              <span>Verificando</span>
+            </div>
+          ) : (
+            'Verificar Local'
+          )}
         </button>
       )}
     </div>

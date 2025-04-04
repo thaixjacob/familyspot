@@ -5,6 +5,7 @@ import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
 import { collection, addDoc } from 'firebase/firestore';
 import NotificationService from '../../App/Services/notificationService';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 // Keep this as inline styles for Google Maps
 const mapContainerStyle = {
   width: '100%',
@@ -243,27 +244,8 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-gray-600 text-center">
-          <svg
-            className="animate-spin h-10 w-10 mx-auto mb-4"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <p className="text-lg font-medium">Loading maps...</p>
+          <LoadingSpinner size="lg" color="text-gray-600" />
+          <p className="text-lg font-medium mt-4">Carregando mapa...</p>
         </div>
       </div>
     );
@@ -330,7 +312,12 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             <h3 className="font-bold">Adicionar Novo Local</h3>
             <p className="text-sm text-gray-600">
               Clique no mapa para selecionar um local
-              {isLoadingPlaceDetails && ' (Carregando detalhes...)'}
+              {isLoadingPlaceDetails && (
+                <span className="flex items-center ml-2">
+                  <LoadingSpinner size="sm" color="text-gray-600" />
+                  <span className="ml-2">Carregando detalhes...</span>
+                </span>
+              )}
             </p>
 
             {newPlaceDetails && (

@@ -33,6 +33,7 @@ import { Place } from '../../types/Place';
 import Map from '../../components/Map/Map';
 import FilterPanel from '../../components/Filters/FilterPanel';
 import PlaceCardSummary from '../../components/Places/PlaceCardSummary';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 interface MainLayoutProps {
   showWelcome: boolean;
@@ -64,8 +65,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             </h2>
             {isLoading ? (
               <div className="text-center py-6 text-gray-500">
-                <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                Carregando lugares...
+                <LoadingSpinner size="md" color="text-blue-500" />
+                <p className="mt-2">Carregando lugares...</p>
               </div>
             ) : filteredPlaces.length > 0 ? (
               <div className="space-y-4">

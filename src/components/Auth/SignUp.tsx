@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import AuthService from '../../App/Services/AuthService';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -146,12 +147,19 @@ const SignUp = () => {
 
         <button
           type="submit"
-          className={`w-full py-2 px-4 rounded-md text-white font-medium ${
+          className={`w-full py-2 px-4 rounded-md text-white font-medium flex items-center justify-center ${
             loading ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
           }`}
           disabled={loading}
         >
-          {loading ? 'Creating Account...' : 'Sign Up'}
+          {loading ? (
+            <div className="flex items-center space-x-2">
+              <LoadingSpinner size="sm" color="text-white" />
+              <span>Criando conta</span>
+            </div>
+          ) : (
+            'Cadastrar'
+          )}
         </button>
       </form>
 

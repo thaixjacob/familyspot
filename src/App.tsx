@@ -15,6 +15,7 @@ import SignUp from './components/Auth/SignUp';
 import Login from './components/Auth/Login';
 import MainLayout from './App/Layout/MainLayout';
 import NotificationToast from './SharedComponents/Notifications/NotificationToast';
+import LoadingSpinner from './SharedComponents/Loading/LoadingSpinner';
 
 function AppContent() {
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
@@ -133,13 +134,19 @@ function AppContent() {
         path="/"
         element={
           <PrivateRoute>
-            <MainLayout
-              showWelcome={showWelcome}
-              setShowWelcome={setShowWelcome}
-              filteredPlaces={filteredPlaces}
-              isLoading={isLoading}
-              onPlaceAdded={handlePlaceAdded}
-            />
+            {isLoading ? (
+              <div className="flex justify-center items-center min-h-screen">
+                <LoadingSpinner size="lg" />
+              </div>
+            ) : (
+              <MainLayout
+                showWelcome={showWelcome}
+                setShowWelcome={setShowWelcome}
+                filteredPlaces={filteredPlaces}
+                isLoading={isLoading}
+                onPlaceAdded={handlePlaceAdded}
+              />
+            )}
           </PrivateRoute>
         }
       />

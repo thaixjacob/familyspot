@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import AuthService from '../../App/Services/AuthService';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -80,12 +81,19 @@ const Login = () => {
 
         <button
           type="submit"
-          className={`w-full py-2 px-4 rounded-md text-white font-medium ${
+          className={`w-full py-2 px-4 rounded-md text-white font-medium flex items-center justify-center ${
             loading ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
           }`}
           disabled={loading}
         >
-          {loading ? 'Entrando...' : 'Entrar'}
+          {loading ? (
+            <div className="flex items-center space-x-2">
+              <LoadingSpinner size="sm" color="text-white" />
+              <span>Entrando</span>
+            </div>
+          ) : (
+            'Entrar'
+          )}
         </button>
       </form>
 

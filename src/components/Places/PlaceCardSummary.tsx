@@ -1,7 +1,7 @@
 import React from 'react';
-import { Place } from '../../types/Place'; // Adjust the path as needed
+import { Place } from '@/types/Place';
 
-const PlaceCard = ({ place }: { place: Place }) => {
+const PlaceCardSummary = ({ place }: { place: Place }) => {
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4 hover:shadow-lg transition-shadow">
       <h3 className="text-xl font-bold text-gray-800 mb-2">{place.name}</h3>
@@ -69,4 +69,4 @@ const PlaceCard = ({ place }: { place: Place }) => {
   );
 };
 
-export default PlaceCard;
+export default PlaceCardSummary;

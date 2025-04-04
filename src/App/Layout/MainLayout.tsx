@@ -32,7 +32,7 @@ import Footer from './Footer';
 import { Place } from '../../types/Place';
 import Map from '../../components/Map/Map';
 import FilterPanel from '../../components/Filters/FilterPanel';
-import PlaceCard from '../../components/Places/PlaceCard';
+import PlaceCardSummary from '../../components/Places/PlaceCardSummary';
 
 interface MainLayoutProps {
   showWelcome: boolean;
@@ -70,7 +70,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             ) : filteredPlaces.length > 0 ? (
               <div className="space-y-4">
                 {filteredPlaces.map(place => (
-                  <PlaceCard key={place.id} place={place} />
+                  <PlaceCardSummary key={place.id} place={place} />
                 ))}
               </div>
             ) : (

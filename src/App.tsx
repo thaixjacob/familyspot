@@ -8,13 +8,13 @@ import { getDoc, doc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase/config';
 import PrivateRoute from './components/Auth/PrivateRoute';
 import { NotificationProvider } from './App/ContextProviders/NotificationContext';
-import NotificationToast from './components/Notifications/NotificationToast';
 import { useNotification } from './App/ContextProviders/NotificationContext';
 import NotificationService from './App/Services/notificationService';
 import { FilterProvider, useFilter } from './App/ContextProviders/FilterContext';
 import SignUp from './components/Auth/SignUp';
 import Login from './components/Auth/Login';
 import MainLayout from './App/Layout/MainLayout';
+import NotificationToast from './SharedComponents/Notifications/NotificationToast';
 
 function AppContent() {
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);

@@ -4,12 +4,15 @@ import { useVerification } from '@/hooks/useVerification';
 import { useAuth } from '@/hooks/useAuth';
 import NotificationService from '@/App/Services/notificationService';
 
-interface PlaceCardProps {
+interface PlaceCardWithVerificationProps {
   place: Place;
   onVerify?: () => void;
 }
 
-const PlaceCard: React.FC<PlaceCardProps> = ({ place, onVerify }) => {
+const PlaceCardWithVerification: React.FC<PlaceCardWithVerificationProps> = ({
+  place,
+  onVerify,
+}) => {
   const { user } = useAuth();
   const { loading, addVerification } = useVerification();
 
@@ -98,4 +101,4 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, onVerify }) => {
   );
 };
 
-export default PlaceCard;
+export default PlaceCardWithVerification;

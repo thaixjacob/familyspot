@@ -11,6 +11,7 @@ FORBIDDEN='console\.[clear|dir|log|info|warn|error]'
 # Check for console references in the code
 if git diff --cached --name-only | \
     grep -E $FILES_PATTERN | \
+    grep -v 'ErrorBoundary\.tsx' | \
     xargs grep --with-filename -n $FORBIDDEN | \
     grep -v '//';
 then

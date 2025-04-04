@@ -6,6 +6,7 @@ import { db } from '../../firebase/config';
 import { collection, addDoc } from 'firebase/firestore';
 import NotificationService from '../../App/Services/notificationService';
 import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
+import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
 // Keep this as inline styles for Google Maps
 const mapContainerStyle = {
   width: '100%',
@@ -300,240 +301,290 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
       <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
         {!isAddingPlace ? (
-          <button
-            onClick={() => setIsAddingPlace(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            disabled={!userState.isAuthenticated}
-          >
-            {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
-          </button>
-        ) : (
-          <div className="space-y-3">
-            <h3 className="font-bold">Adicionar Novo Local</h3>
-            <p className="text-sm text-gray-600">
-              Clique no mapa para selecionar um local
-              {isLoadingPlaceDetails && (
-                <span className="flex items-center ml-2">
-                  <LoadingSpinner size="sm" color="text-gray-600" />
-                  <span className="ml-2">Carregando detalhes...</span>
-                </span>
-              )}
-            </p>
-
-            {newPlaceDetails && (
-              <div className="bg-gray-100 p-2 rounded mb-3">
-                {isCustomNameRequired ? (
-                  <div className="mb-2">
-                    <label htmlFor="custom-name" className="block text-sm text-gray-600 mb-1">
-                      Nome do Local <span className="text-red-500">*</span>
-                      <span className="text-orange-500 text-xs ml-2">
-                        (Forneça um nome para este local)
-                      </span>
-                    </label>
-                    <input
-                      id="custom-name"
-                      type="text"
-                      className="w-full p-2 border rounded"
-                      value={customPlaceName}
-                      onChange={e => setCustomPlaceName(e.target.value)}
-                      placeholder="Ex: Café Familiar, Parque Infantil, etc."
-                      required
-                    />
-                  </div>
-                ) : (
-                  <h4 className="font-semibold">{newPlaceDetails.name}</h4>
-                )}
-                <p className="text-sm text-gray-600">{newPlaceDetails.address}</p>
+          <ErrorBoundary
+            fallback={
+              <div className="space-y-4">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                  <h3 className="text-red-800 font-medium mb-2">Ops! Algo deu errado</h3>
+                  <p className="text-red-600 text-sm mb-3">
+                    Ocorreu um erro inesperado. Por favor, tente novamente.
+                  </p>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  >
+                    Recarregar
+                  </button>
+                </div>
               </div>
-            )}
-
-            <div>
-              <label htmlFor="place-category" className="block text-sm text-gray-600 mb-1">
-                Categoria <span className="text-red-500">*</span>
-                {!categoryDetected && newPlaceDetails && (
-                  <span className="text-orange-500 text-xs ml-2">
-                    (Por favor, selecione a categoria apropriada)
+            }
+          >
+            <>
+              <button
+                onClick={() => setIsAddingPlace(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                disabled={!userState.isAuthenticated}
+              >
+                {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
+              </button>
+            </>
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary
+            fallback={
+              <div className="space-y-4">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                  <h3 className="text-red-800 font-medium mb-2">Erro ao adicionar local</h3>
+                  <p className="text-red-600 text-sm mb-3">
+                    Ocorreu um erro ao processar o formulário. Por favor, tente novamente.
+                  </p>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setIsAddingPlace(false)}
+                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  >
+                    Recarregar
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            <div className="space-y-3">
+              <h3 className="font-bold">Adicionar Novo Local</h3>
+              <p className="text-sm text-gray-600">
+                Clique no mapa para selecionar um local
+                {isLoadingPlaceDetails && (
+                  <span className="flex items-center ml-2">
+                    <LoadingSpinner size="sm" color="text-gray-600" />
+                    <span className="ml-2">Carregando detalhes...</span>
                   </span>
                 )}
-              </label>
-              <select
-                id="place-category"
-                className={`w-full p-2 border rounded mb-2 ${
-                  !categoryDetected && newPlaceDetails ? 'border-orange-400 bg-orange-50' : ''
-                }`}
-                value={newPlaceCategory}
-                onChange={e => {
-                  setNewPlaceCategory(e.target.value);
-                  setCategoryDetected(true); // Uma vez que o usuário escolhe, consideramos como "detectado"
-                }}
-                aria-label="Categoria do local"
-                required
-              >
-                <option value="" disabled>
-                  Selecione uma categoria
-                </option>
-                <option value="activities">Atividades</option>
-                <option value="cafes">Cafés</option>
-                <option value="parks">Parques</option>
-                <option value="playgrounds">Playgrounds</option>
-                <option value="restaurants">Restaurantes</option>
-              </select>
+              </p>
 
-              <label htmlFor="place-price" className="block text-sm text-gray-600 mb-1">
-                Faixa de preço <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="place-price"
-                className="w-full p-2 border rounded mb-2"
-                value={newPlacePriceRange}
-                onChange={e => setNewPlacePriceRange(e.target.value)}
-                aria-label="Faixa de preço"
-              >
-                <option value="$">$ (Econômico)</option>
-                <option value="$$">$$ (Moderado)</option>
-                <option value="$$$">$$$ (Caro)</option>
-                <option value="$$$$">$$$$ (Luxo)</option>
-                <option value="free">Gratuito</option>
-              </select>
+              {newPlaceDetails && (
+                <div className="bg-gray-100 p-2 rounded mb-3">
+                  {isCustomNameRequired ? (
+                    <div className="mb-2">
+                      <label htmlFor="custom-name" className="block text-sm text-gray-600 mb-1">
+                        Nome do Local <span className="text-red-500">*</span>
+                        <span className="text-orange-500 text-xs ml-2">
+                          (Forneça um nome para este local)
+                        </span>
+                      </label>
+                      <input
+                        id="custom-name"
+                        type="text"
+                        className="w-full p-2 border rounded"
+                        value={customPlaceName}
+                        onChange={e => setCustomPlaceName(e.target.value)}
+                        placeholder="Ex: Café Familiar, Parque Infantil, etc."
+                        required
+                      />
+                    </div>
+                  ) : (
+                    <h4 className="font-semibold">{newPlaceDetails.name}</h4>
+                  )}
+                  <p className="text-sm text-gray-600">{newPlaceDetails.address}</p>
+                </div>
+              )}
 
-              <label htmlFor="place-activity" className="block text-sm text-gray-600 mb-1">
-                Tipo de atividade <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="place-activity"
-                className="w-full p-2 border rounded mb-2"
-                value={newPlaceActivityType}
-                onChange={e => setNewPlaceActivityType(e.target.value)}
-                aria-label="Tipo de atividade"
-              >
-                <option value="indoor">Ambiente fechado</option>
-                <option value="outdoor">Ao ar livre</option>
-                <option value="both">Ambos</option>
-              </select>
+              <div>
+                <label htmlFor="place-category" className="block text-sm text-gray-600 mb-1">
+                  Categoria <span className="text-red-500">*</span>
+                  {!categoryDetected && newPlaceDetails && (
+                    <span className="text-orange-500 text-xs ml-2">
+                      (Por favor, selecione a categoria apropriada)
+                    </span>
+                  )}
+                </label>
+                <select
+                  id="place-category"
+                  className={`w-full p-2 border rounded mb-2 ${
+                    !categoryDetected && newPlaceDetails ? 'border-orange-400 bg-orange-50' : ''
+                  }`}
+                  value={newPlaceCategory}
+                  onChange={e => {
+                    setNewPlaceCategory(e.target.value);
+                    setCategoryDetected(true); // Uma vez que o usuário escolhe, consideramos como "detectado"
+                  }}
+                  aria-label="Categoria do local"
+                  required
+                >
+                  <option value="" disabled>
+                    Selecione uma categoria
+                  </option>
+                  <option value="activities">Atividades</option>
+                  <option value="cafes">Cafés</option>
+                  <option value="parks">Parques</option>
+                  <option value="playgrounds">Playgrounds</option>
+                  <option value="restaurants">Restaurantes</option>
+                </select>
 
-              <fieldset className="mb-2">
-                <legend className="block text-sm text-gray-600 mb-1">
-                  Faixas etárias <span className="text-red-500">*</span>
-                </legend>
-                <div className="grid grid-cols-2 gap-1">
-                  {['0-1', '1-3', '3-5', '5+'].map(age => (
-                    <label key={age} className="flex items-center">
+                <label htmlFor="place-price" className="block text-sm text-gray-600 mb-1">
+                  Faixa de preço <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="place-price"
+                  className="w-full p-2 border rounded mb-2"
+                  value={newPlacePriceRange}
+                  onChange={e => setNewPlacePriceRange(e.target.value)}
+                  aria-label="Faixa de preço"
+                >
+                  <option value="$">$ (Econômico)</option>
+                  <option value="$$">$$ (Moderado)</option>
+                  <option value="$$$">$$$ (Caro)</option>
+                  <option value="$$$$">$$$$ (Luxo)</option>
+                  <option value="free">Gratuito</option>
+                </select>
+
+                <label htmlFor="place-activity" className="block text-sm text-gray-600 mb-1">
+                  Tipo de atividade <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="place-activity"
+                  className="w-full p-2 border rounded mb-2"
+                  value={newPlaceActivityType}
+                  onChange={e => setNewPlaceActivityType(e.target.value)}
+                  aria-label="Tipo de atividade"
+                >
+                  <option value="indoor">Ambiente fechado</option>
+                  <option value="outdoor">Ao ar livre</option>
+                  <option value="both">Ambos</option>
+                </select>
+
+                <fieldset className="mb-2">
+                  <legend className="block text-sm text-gray-600 mb-1">
+                    Faixas etárias <span className="text-red-500">*</span>
+                  </legend>
+                  <div className="grid grid-cols-2 gap-1">
+                    {['0-1', '1-3', '3-5', '5+'].map(age => (
+                      <label key={age} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={newPlaceAgeGroups.includes(age)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setNewPlaceAgeGroups([...newPlaceAgeGroups, age]);
+                            } else {
+                              setNewPlaceAgeGroups(newPlaceAgeGroups.filter(a => a !== age));
+                            }
+                          }}
+                        />
+                        <span className="text-sm">{age} anos</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <fieldset className="mb-2">
+                  <legend className="block text-sm text-gray-600 mb-1">Comodidades</legend>
+                  <div className="grid grid-cols-2 gap-1">
+                    <label className="flex items-center">
                       <input
                         type="checkbox"
                         className="mr-2"
-                        checked={newPlaceAgeGroups.includes(age)}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setNewPlaceAgeGroups([...newPlaceAgeGroups, age]);
-                          } else {
-                            setNewPlaceAgeGroups(newPlaceAgeGroups.filter(a => a !== age));
-                          }
-                        }}
+                        checked={newPlaceAmenities.changingTables}
+                        onChange={e =>
+                          setNewPlaceAmenities({
+                            ...newPlaceAmenities,
+                            changingTables: e.target.checked,
+                          })
+                        }
                       />
-                      <span className="text-sm">{age} anos</span>
+                      <span className="text-sm">Trocadores</span>
                     </label>
-                  ))}
-                </div>
-              </fieldset>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={newPlaceAmenities.playAreas}
+                        onChange={e =>
+                          setNewPlaceAmenities({
+                            ...newPlaceAmenities,
+                            playAreas: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="text-sm">Área de recreação</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={newPlaceAmenities.highChairs}
+                        onChange={e =>
+                          setNewPlaceAmenities({
+                            ...newPlaceAmenities,
+                            highChairs: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="text-sm">Cadeiras para crianças</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={newPlaceAmenities.accessibility}
+                        onChange={e =>
+                          setNewPlaceAmenities({
+                            ...newPlaceAmenities,
+                            accessibility: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="text-sm">Acessibilidade</span>
+                    </label>
+                  </div>
+                </fieldset>
+              </div>
 
-              <fieldset className="mb-2">
-                <legend className="block text-sm text-gray-600 mb-1">Comodidades</legend>
-                <div className="grid grid-cols-2 gap-1">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-2"
-                      checked={newPlaceAmenities.changingTables}
-                      onChange={e =>
-                        setNewPlaceAmenities({
-                          ...newPlaceAmenities,
-                          changingTables: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="text-sm">Trocadores</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-2"
-                      checked={newPlaceAmenities.playAreas}
-                      onChange={e =>
-                        setNewPlaceAmenities({
-                          ...newPlaceAmenities,
-                          playAreas: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="text-sm">Área de recreação</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-2"
-                      checked={newPlaceAmenities.highChairs}
-                      onChange={e =>
-                        setNewPlaceAmenities({
-                          ...newPlaceAmenities,
-                          highChairs: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="text-sm">Cadeiras para crianças</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-2"
-                      checked={newPlaceAmenities.accessibility}
-                      onChange={e =>
-                        setNewPlaceAmenities({
-                          ...newPlaceAmenities,
-                          accessibility: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="text-sm">Acessibilidade</span>
-                  </label>
-                </div>
-              </fieldset>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    setIsAddingPlace(false);
+                    setNewPin(null);
+                    setNewPlaceDetails(null);
+                    setIsCustomNameRequired(false);
+                    setCustomPlaceName('');
+                  }}
+                  className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={saveNewPlace}
+                  disabled={
+                    !newPin ||
+                    !newPlaceDetails ||
+                    !newPlaceCategory ||
+                    (isCustomNameRequired && !customPlaceName)
+                  }
+                  className={`px-4 py-2 rounded-md ${
+                    !newPin ||
+                    !newPlaceDetails ||
+                    !newPlaceCategory ||
+                    (isCustomNameRequired && !customPlaceName)
+                      ? 'bg-blue-300 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  Salvar
+                </button>
+              </div>
             </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  setIsAddingPlace(false);
-                  setNewPin(null);
-                  setNewPlaceDetails(null);
-                  setIsCustomNameRequired(false);
-                  setCustomPlaceName('');
-                }}
-                className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
-              >
-                Cancelar
-              </button>
-
-              <button
-                onClick={saveNewPlace}
-                disabled={
-                  !newPin ||
-                  !newPlaceDetails ||
-                  !newPlaceCategory ||
-                  (isCustomNameRequired && !customPlaceName)
-                }
-                className={`px-4 py-2 rounded-md ${
-                  !newPin ||
-                  !newPlaceDetails ||
-                  !newPlaceCategory ||
-                  (isCustomNameRequired && !customPlaceName)
-                    ? 'bg-blue-300 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                Salvar
-              </button>
-            </div>
-          </div>
+          </ErrorBoundary>
         )}
       </div>
     </div>

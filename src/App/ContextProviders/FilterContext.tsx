@@ -31,6 +31,7 @@ const defaultFilters: FilterValues = {
     playAreas: false,
     highChairs: false,
     accessibility: false,
+    kidsMenu: false,
   },
 };
 

@@ -48,6 +48,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     playAreas: false,
     highChairs: false,
     accessibility: false,
+    kidsMenu: false,
   });
   // Adicionar estados para nome personalizado
   const [isCustomNameRequired, setIsCustomNameRequired] = useState(false);
@@ -225,6 +226,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         playAreas: false,
         highChairs: false,
         accessibility: false,
+        kidsMenu: false,
       });
       setIsAddingPlace(false);
       setCategoryDetected(false);
@@ -544,6 +546,20 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                         }
                       />
                       <span className="text-sm">Acessibilidade</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={newPlaceAmenities.kidsMenu}
+                        onChange={e =>
+                          setNewPlaceAmenities({
+                            ...newPlaceAmenities,
+                            kidsMenu: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="text-sm">Menu Infantil</span>
                     </label>
                   </div>
                 </fieldset>

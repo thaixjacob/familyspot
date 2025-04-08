@@ -10,6 +10,7 @@ export interface FilterValues {
     playAreas: boolean;
     highChairs: boolean;
     accessibility: boolean;
+    kidsMenu: boolean;
   };
 }
 
@@ -35,7 +36,7 @@ const FilterPanel = () => {
   };
 
   const handleAmenityChange = (
-    amenity: 'changingTables' | 'playAreas' | 'highChairs' | 'accessibility'
+    amenity: 'changingTables' | 'playAreas' | 'highChairs' | 'accessibility' | 'kidsMenu'
   ) => {
     setFilters({
       ...filters,
@@ -75,6 +76,7 @@ const FilterPanel = () => {
                   {key === 'playAreas' && 'Área de Brincar'}
                   {key === 'highChairs' && 'Cadeirão'}
                   {key === 'accessibility' && 'Acessibilidade'}
+                  {key === 'kidsMenu' && 'Menu Infantil'}
                 </li>
               ))}
           </ul>
@@ -174,6 +176,15 @@ const FilterPanel = () => {
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700">Acessibilidade</span>
+          </label>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={filters.amenities.kidsMenu}
+              onChange={() => handleAmenityChange('kidsMenu')}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="ml-2 text-sm text-gray-700">Menu Infantil</span>
           </label>
         </div>
       </div>

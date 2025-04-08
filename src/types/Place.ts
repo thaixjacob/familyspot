@@ -16,6 +16,7 @@ interface Place {
     playAreas: boolean;
     highChairs: boolean;
     accessibility: boolean;
+    kidsMenu: boolean;
   };
   verifications: number;
   verifiedBy: string[]; // Array of userIds
@@ -43,6 +44,7 @@ interface PlaceInput {
     playAreas: boolean;
     highChairs: boolean;
     accessibility: boolean;
+    kidsMenu: boolean;
   };
   activityType: string;
 }

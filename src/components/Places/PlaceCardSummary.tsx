@@ -42,6 +42,11 @@ const PlaceCardSummary = ({ place }: { place: Place }) => {
             ♿
           </span>
         )}
+        {place.amenities.kidsMenu && (
+          <span className="text-gray-700 bg-gray-100 rounded-full p-1.5" title="Kids Menu">
+            🍽️
+          </span>
+        )}
       </div>
       <div className="text-sm text-gray-600 border-t pt-2">
         {place.verifications > 0 ? (

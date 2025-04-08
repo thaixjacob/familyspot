@@ -1,3 +1,19 @@
+/**
+ * NotificationContext
+ *
+ * Este contexto gerencia o sistema de notificações da aplicação.
+ * Ele fornece funcionalidades para:
+ * - Exibir notificações de sucesso
+ * - Exibir notificações de erro
+ * - Exibir notificações de aviso
+ * - Exibir notificações de informação
+ * - Gerenciar o estado de visibilidade das notificações
+ * - Controlar a duração das notificações
+ *
+ * O contexto é usado em toda a aplicação para fornecer feedback ao usuário
+ * sobre ações realizadas, erros ou informações importantes.
+ */
+
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -25,6 +41,10 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  const removeNotification = useCallback((id: number) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  }, []);
+
   const addNotification = useCallback(
     (type: NotificationType, message: string, details?: string | Record<string, unknown>) => {
       const id = Date.now();
@@ -45,12 +65,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }, 5000);
       }
     },
-    []
+    [removeNotification]
   );
-
-  const removeNotification = useCallback((id: number) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  }, []);
 
   return (
     <NotificationContext.Provider value={{ notifications, addNotification, removeNotification }}>

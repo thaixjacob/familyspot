@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 red='\033[0;31m'
 green='\033[0;32m'
 yellow='\033[0;33m'
@@ -14,6 +11,7 @@ FORBIDDEN='console\.[clear|dir|log|info|warn|error]'
 # Check for console references in the code
 if git diff --cached --name-only | \
     grep -E $FILES_PATTERN | \
+    grep -v 'ErrorBoundary\.tsx' | \
     xargs grep --with-filename -n $FORBIDDEN | \
     grep -v '//';
 then

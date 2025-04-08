@@ -1,3 +1,22 @@
+/**
+ * Serviço de Gerenciamento de Locais
+ *
+ * Este serviço é responsável por todas as operações relacionadas a locais (places) no Firestore,
+ * incluindo criação, atualização, consulta e filtragem de locais.
+ *
+ * Funcionalidades:
+ * - Listagem de todos os locais
+ * - Busca por categoria
+ * - Busca por faixa etária
+ * - Adição de novos locais
+ * - Atualização de locais existentes
+ * - Busca por ID
+ *
+ * @example
+ * const places = await getAllPlaces();
+ * const restaurants = await getPlacesByCategory('restaurant');
+ */
+
 // to handle Firestore operations
 import {
   collection,
@@ -10,8 +29,7 @@ import {
   where,
   GeoPoint,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
-
+import { db } from '../../firebase/config';
 // Interface for Place data
 interface Place {
   name: string;

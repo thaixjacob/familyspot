@@ -1,3 +1,23 @@
+/**
+ * Serviço de Notificações
+ *
+ * Este serviço implementa um sistema centralizado de notificações para a aplicação,
+ * permitindo exibir mensagens de diferentes tipos (info, sucesso, erro, etc).
+ *
+ * Funcionalidades:
+ * - Notificações de debug (apenas em ambiente de desenvolvimento)
+ * - Notificações informativas
+ * - Notificações de sucesso
+ * - Notificações de aviso
+ * - Notificações de erro
+ *
+ * @example
+ * NotificationService.initialize((type, message) => {
+ *   // Implementação do callback de notificação
+ * });
+ * NotificationService.success('Operação concluída com sucesso!');
+ */
+
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 class NotificationService {

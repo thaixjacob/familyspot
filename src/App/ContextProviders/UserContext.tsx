@@ -1,3 +1,17 @@
+/**
+ * UserContext
+ *
+ * Este contexto gerencia o estado de autenticação e informações do usuário.
+ * Ele fornece funcionalidades para:
+ * - Gerenciar o estado de autenticação do usuário
+ * - Armazenar informações básicas do usuário (email, nome)
+ * - Controlar o estado de carregamento durante operações de autenticação
+ * - Fornecer métodos para login e logout
+ *
+ * O contexto é usado em toda a aplicação para controlar o acesso a funcionalidades
+ * restritas e personalizar a experiência do usuário baseada em seu estado de autenticação.
+ */
+
 import React, { createContext, useContext, useReducer } from 'react';
 
 // Definir os tipos

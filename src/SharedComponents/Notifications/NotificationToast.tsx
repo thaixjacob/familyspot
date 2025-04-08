@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNotification } from '../../contexts/NotificationContext';
+import { useNotification } from '../../App/ContextProviders/NotificationContext';
 
 const NotificationToast: React.FC = () => {
   const { notifications, removeNotification } = useNotification();

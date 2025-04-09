@@ -30,7 +30,7 @@ import {
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { Verification } from '@/types';
+import { Verification } from '../../types';
 
 // Verify a place
 export const verifyPlace = async (placeId: string, userId: string) => {

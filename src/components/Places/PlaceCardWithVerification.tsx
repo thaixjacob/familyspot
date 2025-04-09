@@ -1,9 +1,9 @@
 import React from 'react';
-import { Place } from '@/types/Place';
-import { useVerification } from '@/hooks/useVerification';
-import { useAuth } from '@/hooks/useAuth';
-import NotificationService from '@/App/Services/notificationService';
-import LoadingSpinner from '@/SharedComponents/Loading/LoadingSpinner';
+import { Place } from '../../types/Place';
+import { useVerification } from '../../hooks/useVerification';
+import { useAuth } from '../../hooks/useAuth';
+import NotificationService from '../../App/Services/notificationService';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 interface PlaceCardWithVerificationProps {
   place: Place;

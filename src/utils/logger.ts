@@ -1,4 +1,4 @@
-import { analytics } from '@/firebase/config';
+import { analytics } from '../firebase/config';
 import { logEvent as firebaseLogEvent } from 'firebase/analytics';
 
 export const logEvent = (eventName: string, params?: Record<string, any>) => {

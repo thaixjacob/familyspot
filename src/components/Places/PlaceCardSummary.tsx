@@ -1,5 +1,5 @@
 import React from 'react';
-import { Place } from '@/types/Place';
+import { Place } from 'types/Place';
 
 const PlaceCardSummary = ({ place }: { place: Place }) => {
   return (

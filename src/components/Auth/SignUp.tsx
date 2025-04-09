@@ -27,14 +27,12 @@ interface FormErrors {
   firstName?: string;
   email?: string;
   password?: string;
-  nickname?: string;
 }
 
 const SignUp = () => {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -62,10 +60,6 @@ const SignUp = () => {
       errors.password = 'Senha deve ter pelo menos 6 caracteres';
     }
 
-    if (nickname && nickname.length < 3) {
-      errors.nickname = 'Apelido deve ter pelo menos 3 caracteres';
-    }
-
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -80,10 +74,10 @@ const SignUp = () => {
     try {
       setLoading(true);
       setError('');
-      const displayName = nickname.trim() || firstName;
 
       const response = await authService.signUp({
-        name: displayName,
+        name: firstName,
+        lastName: lastName,
         email,
         password,
       });
@@ -91,7 +85,7 @@ const SignUp = () => {
       dispatch({
         type: 'LOGIN',
         payload: {
-          displayName,
+          displayName: firstName,
           email: response.user.email || '',
         },
       });
@@ -99,7 +93,7 @@ const SignUp = () => {
       navigate('/', {
         state: {
           showWelcome: true,
-          displayName: displayName,
+          displayName: firstName,
         },
       });
     } catch (error) {
@@ -161,28 +155,6 @@ const SignUp = () => {
               value={lastName}
               onChange={e => setLastName(e.target.value)}
             />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-medium mb-1" htmlFor="nickname">
-              Apelido
-            </label>
-            <input
-              id="nickname"
-              type="text"
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                formErrors.nickname
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
-              value={nickname}
-              onChange={e => setNickname(e.target.value)}
-              placeholder="Como você quer ser conhecido na comunidade"
-            />
-            {formErrors.nickname && (
-              <p className="text-red-500 text-xs mt-1">{formErrors.nickname}</p>
-            )}
-            <p className="text-gray-500 text-xs mt-1">Se não fornecido, usaremos seu nome</p>
           </div>
 
           <div className="mb-4">

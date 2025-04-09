@@ -27,6 +27,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '../../firebase/config';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { logEvent, logError } from '../../utils/logger';
 
 interface LoginCredentials {
   email: string;
@@ -35,6 +36,7 @@ interface LoginCredentials {
 
 interface SignUpData {
   name: string;
+  lastName: string;
   email: string;
   password: string;
 }
@@ -50,49 +52,105 @@ class AuthService {
   }
 
   public async login(credentials: LoginCredentials) {
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      credentials.email,
-      credentials.password
-    );
+    try {
+      logEvent('auth_login_started');
 
-    // Buscar dados adicionais do usuário no Firestore
-    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-    const userData = userDoc.data();
+      // Primeiro, fazer logout para garantir um estado limpo
+      await this.logout();
+      logEvent('auth_logout_success');
 
-    return {
-      user: {
-        ...userCredential.user,
-        displayName: userData?.displayName || '',
-      },
-    };
+      // Fazer login
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        credentials.email,
+        credentials.password
+      );
+      logEvent('auth_login_success', { uid: userCredential.user.uid });
+
+      // Aguardar a autenticação ser completada
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        // Buscar dados do usuário
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+
+        const userData = userDoc.data();
+
+        // Verificar e criar userPreferences se necessário
+        const userPrefDoc = await getDoc(doc(db, 'userPreferences', userCredential.user.uid));
+
+        if (!userPrefDoc.exists()) {
+          await setDoc(doc(db, 'userPreferences', userCredential.user.uid), {
+            locationPermission: false,
+            updatedAt: new Date(),
+          });
+        }
+
+        return {
+          user: {
+            ...userCredential.user,
+            displayName: userData?.displayName || '',
+          },
+        };
+      } catch (firestoreError) {
+        logError(firestoreError, 'firestore_access_error');
+        // Mesmo com erro no Firestore, retornamos o usuário autenticado
+        return {
+          user: userCredential.user,
+        };
+      }
+    } catch (error) {
+      logError(error, 'auth_login_error');
+      throw error;
+    }
   }
 
   public async signUp(userData: SignUpData) {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      userData.email,
-      userData.password
-    );
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        userData.email,
+        userData.password
+      );
 
-    // Criar documento do usuário no Firestore
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      displayName: userData.name,
-      email: userData.email,
-      createdAt: new Date(),
-      role: 'user',
-    });
-
-    return {
-      user: {
-        ...userCredential.user,
+      // Criar documento do usuário
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        name: userData.name,
+        lastName: userData.lastName,
         displayName: userData.name,
-      },
-    };
+        email: userData.email,
+        createdAt: new Date(),
+        role: 'user',
+        locationPermission: false,
+      });
+
+      // Criar documento de preferências
+      await setDoc(doc(db, 'userPreferences', userCredential.user.uid), {
+        locationPermission: false,
+        updatedAt: new Date(),
+      });
+
+      return {
+        user: {
+          ...userCredential.user,
+          displayName: userData.name,
+        },
+      };
+    } catch (error) {
+      logError(error, 'auth_signup_error');
+      throw error;
+    }
   }
 
   public async logout() {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+      // Aguardar o logout ser completado
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      logError(error, 'auth_logout_error');
+      throw error;
+    }
   }
 
   public isAuthenticated(): boolean {

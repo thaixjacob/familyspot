@@ -54,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ showWelcome, setShowWelcome }) => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">FAMILYSPOT</h1>
         <div className="space-x-4">
-          {state.displayName ? (
+          {state.isAuthenticated ? (
             <button
               onClick={handleLogout}
               className="bg-transparent text-white px-4 py-2 rounded-md hover:bg-blue-500 transition-colors border border-white"

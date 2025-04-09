@@ -3,10 +3,14 @@ import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps
 import { Place } from '../../types/Place';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import NotificationService from '../../App/Services/notificationService';
 import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
+import LocationPermissionDialog from './LocationPermissionDialog';
+import LocationPermissionDialogMobile from './LocationPermissionDialogMobile';
+import { auth } from '../../firebase/config';
+import { logError } from '../../utils/logger';
 // Keep this as inline styles for Google Maps
 const mapContainerStyle = {
   width: '100%',
@@ -19,7 +23,7 @@ const center = {
 };
 
 // Bibliotecas necessárias para o Google Maps
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'geometry'];
 
 interface MapProps {
   places: Place[];
@@ -53,12 +57,81 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   // Adicionar estados para nome personalizado
   const [isCustomNameRequired, setIsCustomNameRequired] = useState(false);
   const [customPlaceName, setCustomPlaceName] = useState('');
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
+  const [isNearbyMode, setIsNearbyMode] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const lastClickTime = useRef<number>(0);
+  const COOLDOWN_DURATION = 30000; // 30 segundos em milissegundos
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
       NotificationService.error('Google Maps API key is missing!');
       return;
     }
+  }, []);
+
+  useEffect(() => {
+    const checkLocationPermission = async () => {
+      try {
+        // Se o usuário estiver autenticado, verificar primeiro a permissão no Firestore
+        if (userState.isAuthenticated && auth.currentUser) {
+          try {
+            const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
+            const userPrefDoc = await getDoc(userPrefRef);
+
+            if (!userPrefDoc.exists()) {
+              await setDoc(userPrefRef, {
+                locationPermission: false,
+                updatedAt: new Date(),
+              });
+              return false;
+            }
+
+            const userData = userPrefDoc.data();
+
+            if (userData.locationPermission) {
+              handleNearMeClick(true);
+              return true;
+            }
+          } catch (firestoreError) {
+            logError(firestoreError, 'map_firestore_access_error');
+            // Mesmo com erro no Firestore, continuamos para verificar a permissão do navegador
+          }
+        }
+
+        // Se não estiver autenticado ou não tiver permissão no Firestore, verificar permissão do navegador
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+
+        if (permission.state === 'granted') {
+          handleNearMeClick(true);
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        logError(error, 'map_permission_check_error');
+        return false;
+      }
+    };
+
+    checkLocationPermission();
+  }, [userState.isAuthenticated]);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const { isLoaded, loadError } = useLoadScript({
@@ -235,12 +308,189 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
       NotificationService.success('Local adicionado com sucesso!');
     } catch (error) {
+      logError(error, 'map_permission_save_error');
       NotificationService.error(
         'Erro ao adicionar local:',
         error instanceof Error ? { message: error.message } : String(error)
       );
       NotificationService.error('Erro ao adicionar local. Tente novamente.');
     }
+  };
+
+  const checkBrowserPermission = async () => {
+    try {
+      // Se o usuário estiver autenticado, verificar primeiro a permissão no Firestore
+      if (userState.isAuthenticated && auth.currentUser) {
+        const userPrefDoc = await getDoc(doc(db, 'userPreferences', auth.currentUser.uid));
+        if (userPrefDoc.exists()) {
+          const userData = userPrefDoc.data();
+          if (userData.locationPermission) {
+            handleNearMeClick(true);
+            return true;
+          }
+        }
+      }
+
+      // Se não estiver autenticado ou não tiver permissão no Firestore, verificar permissão do navegador
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+
+      if (permission.state === 'granted') {
+        handleNearMeClick(true);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logError(error, 'map_browser_permission_error');
+      return false;
+    }
+  };
+
+  const handleNearMeClick = async (hasPermission = false) => {
+    const now = Date.now();
+    const timeSinceLastClick = now - lastClickTime.current;
+
+    if (timeSinceLastClick < COOLDOWN_DURATION) {
+      const remainingTime = Math.ceil((COOLDOWN_DURATION - timeSinceLastClick) / 1000);
+      NotificationService.warning(
+        `Por favor, aguarde ${remainingTime} segundos antes de tentar novamente.`
+      );
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      NotificationService.error('Geolocalização não é suportada pelo seu navegador');
+      return;
+    }
+
+    // Se já temos permissão do navegador, não precisamos verificar o Firestore
+    if (hasPermission) {
+      proceedWithGeolocation();
+      return;
+    }
+
+    // Se não sabemos se o usuário tem permissão, verificamos primeiro o navegador
+    if (hasLocationPermission === null) {
+      const browserHasPermission = await checkBrowserPermission();
+      if (browserHasPermission) return;
+    }
+
+    // Se chegou aqui, precisamos mostrar o diálogo
+    setShowPermissionDialog(true);
+  };
+
+  const proceedWithGeolocation = () => {
+    setIsLocationLoading(true);
+    setIsNearbyMode(true);
+    lastClickTime.current = Date.now();
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const userPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        setUserLocation(userPos);
+
+        if (!google.maps.geometry || !google.maps.geometry.spherical) {
+          NotificationService.error(
+            'Biblioteca de geometria não está disponível. Por favor, tente novamente.'
+          );
+          setIsLocationLoading(false);
+          return;
+        }
+
+        const nearby = places.filter(place => {
+          const placePos = {
+            lat: place.location.latitude,
+            lng: place.location.longitude,
+          };
+          const distance = google.maps.geometry.spherical.computeDistanceBetween(
+            new google.maps.LatLng(userPos.lat, userPos.lng),
+            new google.maps.LatLng(placePos.lat, placePos.lng)
+          );
+          return distance <= 5000;
+        });
+
+        setNearbyPlaces(nearby);
+
+        if (nearby.length === 0) {
+          NotificationService.info(
+            'Nenhum lugar encontrado próximo a você. Que tal adicionar um novo lugar?',
+            {
+              duration: 5000,
+              action: {
+                label: 'Adicionar',
+                onClick: () => setIsAddingPlace(true),
+              },
+            }
+          );
+        } else {
+          NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
+        }
+
+        setIsLocationLoading(false);
+      },
+      error => {
+        logError(error, 'map_geolocation_error');
+        NotificationService.error('Não foi possível obter sua localização:', error.message);
+        setIsNearbyMode(false);
+        setIsLocationLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const handlePermissionGranted = async () => {
+    setHasLocationPermission(true);
+    setShowPermissionDialog(false);
+
+    if (auth.currentUser) {
+      try {
+        const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
+        await setDoc(
+          userPrefRef,
+          {
+            locationPermission: true,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        logError(error, 'map_permission_save_error');
+        // Mesmo com erro ao salvar, continuamos com a geolocalização
+      }
+    }
+
+    proceedWithGeolocation();
+  };
+
+  const handlePermissionDenied = async () => {
+    setHasLocationPermission(false);
+    setShowPermissionDialog(false);
+
+    if (auth.currentUser) {
+      try {
+        const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
+        await setDoc(
+          userPrefRef,
+          {
+            locationPermission: false,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        logError(error, 'map_permission_save_error');
+      }
+    }
+
+    NotificationService.error('A funcionalidade "Próximo a Mim" requer permissão de localização.');
   };
 
   if (loadError || !isLoaded) {
@@ -259,11 +509,11 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
         zoom={13}
-        center={center}
+        center={userLocation || center}
         onClick={handleMapClick}
         onLoad={onMapLoad}
       >
-        {places.map(place => (
+        {(isNearbyMode ? nearbyPlaces : places).map(place => (
           <Marker
             key={place.id}
             position={{
@@ -273,6 +523,15 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             onClick={() => setSelectedPlace(place)}
           />
         ))}
+
+        {userLocation && (
+          <Marker
+            position={userLocation}
+            icon={{
+              url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+            }}
+          />
+        )}
 
         {newPin && (
           <Marker
@@ -301,6 +560,19 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         )}
       </GoogleMap>
 
+      {showPermissionDialog &&
+        (isMobile ? (
+          <LocationPermissionDialogMobile
+            onPermissionGranted={handlePermissionGranted}
+            onPermissionDenied={handlePermissionDenied}
+          />
+        ) : (
+          <LocationPermissionDialog
+            onPermissionGranted={handlePermissionGranted}
+            onPermissionDenied={handlePermissionDenied}
+          />
+        ))}
+
       <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
         {!isAddingPlace ? (
           <ErrorBoundary
@@ -324,13 +596,37 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             }
           >
             <>
-              <button
-                onClick={() => setIsAddingPlace(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                disabled={!userState.isAuthenticated}
-              >
-                {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
-              </button>
+              <div className="flex space-x-2 mb-4">
+                <button
+                  onClick={() => setIsAddingPlace(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  disabled={!userState.isAuthenticated}
+                >
+                  {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
+                </button>
+                <button
+                  onClick={() => handleNearMeClick()}
+                  className={`px-4 py-2 rounded-md ${
+                    isLocationLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  {isLocationLoading ? (
+                    <span className="flex items-center">
+                      <LoadingSpinner size="sm" color="text-white" />
+                      <span className="ml-2">Buscando...</span>
+                    </span>
+                  ) : (
+                    'Próximo a Mim'
+                  )}
+                </button>
+              </div>
+              {isNearbyMode && nearbyPlaces.length > 0 && (
+                <div className="text-sm text-gray-600 mb-2">
+                  Mostrando {nearbyPlaces.length} lugares próximos a você
+                </div>
+              )}
             </>
           </ErrorBoundary>
         ) : (

@@ -74,6 +74,130 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     }
   }, []);
 
+  const proceedWithGeolocation = useCallback(() => {
+    setIsLocationLoading(true);
+    setIsNearbyMode(true);
+    lastClickTime.current = Date.now();
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const userPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        setUserLocation(userPos);
+
+        if (!google.maps.geometry || !google.maps.geometry.spherical) {
+          NotificationService.error(
+            'Biblioteca de geometria não está disponível. Por favor, tente novamente.'
+          );
+          setIsLocationLoading(false);
+          return;
+        }
+
+        const nearby = places.filter(place => {
+          const placePos = {
+            lat: place.location.latitude,
+            lng: place.location.longitude,
+          };
+          const distance = google.maps.geometry.spherical.computeDistanceBetween(
+            new google.maps.LatLng(userPos.lat, userPos.lng),
+            new google.maps.LatLng(placePos.lat, placePos.lng)
+          );
+          return distance <= 5000;
+        });
+
+        setNearbyPlaces(nearby);
+
+        if (nearby.length === 0) {
+          NotificationService.info('Nenhum lugar encontrado. Que tal adicionar um novo lugar?');
+        } else {
+          NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
+        }
+
+        setIsLocationLoading(false);
+      },
+      error => {
+        logError(error, 'map_geolocation_error');
+        NotificationService.error('Não foi possível obter sua localização:', error.message);
+        setIsNearbyMode(false);
+        setIsLocationLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0,
+      }
+    );
+  }, [places]);
+
+  const checkBrowserPermission = useCallback(async () => {
+    try {
+      // Se o usuário estiver autenticado, verificar primeiro a permissão no Firestore
+      if (userState.isAuthenticated && auth.currentUser) {
+        const userPrefDoc = await getDoc(doc(db, 'userPreferences', auth.currentUser.uid));
+        if (userPrefDoc.exists()) {
+          const userData = userPrefDoc.data();
+          if (userData.locationPermission) {
+            return true;
+          }
+        }
+      }
+
+      // Se não estiver autenticado ou não tiver permissão no Firestore, verificar permissão do navegador
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+
+      if (permission.state === 'granted') {
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logError(error, 'map_browser_permission_error');
+      return false;
+    }
+  }, [userState.isAuthenticated]);
+
+  const handleNearMeClick = useCallback(
+    async (hasPermission = false) => {
+      const now = Date.now();
+      const timeSinceLastClick = now - lastClickTime.current;
+
+      if (timeSinceLastClick < COOLDOWN_DURATION) {
+        const remainingTime = Math.ceil((COOLDOWN_DURATION - timeSinceLastClick) / 1000);
+        NotificationService.warning(
+          `Por favor, aguarde ${remainingTime} segundos antes de tentar novamente.`
+        );
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        NotificationService.error('Geolocalização não é suportada pelo seu navegador');
+        return;
+      }
+
+      // Se já temos permissão do navegador, não precisamos verificar o Firestore
+      if (hasPermission) {
+        proceedWithGeolocation();
+        return;
+      }
+
+      // Se não sabemos se o usuário tem permissão, verificamos primeiro o navegador
+      if (hasLocationPermission === null) {
+        const browserHasPermission = await checkBrowserPermission();
+        if (browserHasPermission) {
+          proceedWithGeolocation();
+          return;
+        }
+      }
+
+      // Se chegou aqui, precisamos mostrar o diálogo
+      setShowPermissionDialog(true);
+    },
+    [proceedWithGeolocation, hasLocationPermission, checkBrowserPermission]
+  );
+
   useEffect(() => {
     const checkLocationPermission = async () => {
       try {
@@ -119,7 +243,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     };
 
     checkLocationPermission();
-  }, [userState.isAuthenticated]);
+  }, [userState.isAuthenticated, handleNearMeClick]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -315,135 +439,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       );
       NotificationService.error('Erro ao adicionar local. Tente novamente.');
     }
-  };
-
-  const checkBrowserPermission = async () => {
-    try {
-      // Se o usuário estiver autenticado, verificar primeiro a permissão no Firestore
-      if (userState.isAuthenticated && auth.currentUser) {
-        const userPrefDoc = await getDoc(doc(db, 'userPreferences', auth.currentUser.uid));
-        if (userPrefDoc.exists()) {
-          const userData = userPrefDoc.data();
-          if (userData.locationPermission) {
-            handleNearMeClick(true);
-            return true;
-          }
-        }
-      }
-
-      // Se não estiver autenticado ou não tiver permissão no Firestore, verificar permissão do navegador
-      const permission = await navigator.permissions.query({ name: 'geolocation' });
-
-      if (permission.state === 'granted') {
-        handleNearMeClick(true);
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logError(error, 'map_browser_permission_error');
-      return false;
-    }
-  };
-
-  const handleNearMeClick = async (hasPermission = false) => {
-    const now = Date.now();
-    const timeSinceLastClick = now - lastClickTime.current;
-
-    if (timeSinceLastClick < COOLDOWN_DURATION) {
-      const remainingTime = Math.ceil((COOLDOWN_DURATION - timeSinceLastClick) / 1000);
-      NotificationService.warning(
-        `Por favor, aguarde ${remainingTime} segundos antes de tentar novamente.`
-      );
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      NotificationService.error('Geolocalização não é suportada pelo seu navegador');
-      return;
-    }
-
-    // Se já temos permissão do navegador, não precisamos verificar o Firestore
-    if (hasPermission) {
-      proceedWithGeolocation();
-      return;
-    }
-
-    // Se não sabemos se o usuário tem permissão, verificamos primeiro o navegador
-    if (hasLocationPermission === null) {
-      const browserHasPermission = await checkBrowserPermission();
-      if (browserHasPermission) return;
-    }
-
-    // Se chegou aqui, precisamos mostrar o diálogo
-    setShowPermissionDialog(true);
-  };
-
-  const proceedWithGeolocation = () => {
-    setIsLocationLoading(true);
-    setIsNearbyMode(true);
-    lastClickTime.current = Date.now();
-
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const userPos = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-
-        setUserLocation(userPos);
-
-        if (!google.maps.geometry || !google.maps.geometry.spherical) {
-          NotificationService.error(
-            'Biblioteca de geometria não está disponível. Por favor, tente novamente.'
-          );
-          setIsLocationLoading(false);
-          return;
-        }
-
-        const nearby = places.filter(place => {
-          const placePos = {
-            lat: place.location.latitude,
-            lng: place.location.longitude,
-          };
-          const distance = google.maps.geometry.spherical.computeDistanceBetween(
-            new google.maps.LatLng(userPos.lat, userPos.lng),
-            new google.maps.LatLng(placePos.lat, placePos.lng)
-          );
-          return distance <= 5000;
-        });
-
-        setNearbyPlaces(nearby);
-
-        if (nearby.length === 0) {
-          NotificationService.info(
-            'Nenhum lugar encontrado próximo a você. Que tal adicionar um novo lugar?',
-            {
-              duration: 5000,
-              action: {
-                label: 'Adicionar',
-                onClick: () => setIsAddingPlace(true),
-              },
-            }
-          );
-        } else {
-          NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
-        }
-
-        setIsLocationLoading(false);
-      },
-      error => {
-        logError(error, 'map_geolocation_error');
-        NotificationService.error('Não foi possível obter sua localização:', error.message);
-        setIsNearbyMode(false);
-        setIsLocationLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0,
-      }
-    );
   };
 
   const handlePermissionGranted = async () => {

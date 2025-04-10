@@ -7,8 +7,6 @@ import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import NotificationService from '../../App/Services/notificationService';
 import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
-import LocationPermissionDialog from './LocationPermissionDialog';
-import LocationPermissionDialogMobile from './LocationPermissionDialogMobile';
 import { auth } from '../../firebase/config';
 import { logError } from '../../utils/logger';
 // Keep this as inline styles for Google Maps
@@ -59,12 +57,10 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
   const [isNearbyMode, setIsNearbyMode] = useState(false);
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
   const lastClickTime = useRef<number>(0);
   const COOLDOWN_DURATION = 30000; // 30 segundos em milissegundos
-  const [isMobile, setIsMobile] = useState(false);
   const locationCheckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -209,8 +205,24 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         }
       }
 
-      // Se chegou aqui, precisamos mostrar o diálogo
-      setShowPermissionDialog(true);
+      // Se chegou aqui, solicitamos a permissão diretamente
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          setHasLocationPermission(true);
+          proceedWithGeolocation();
+        },
+        () => {
+          setHasLocationPermission(false);
+          NotificationService.error(
+            'Para usar a funcionalidade "Próximo a Mim", precisamos que você permita o seu navegador a acessar sua localização.'
+          );
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        }
+      );
     },
     [
       proceedWithGeolocation,
@@ -281,19 +293,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
     checkLocationPermission();
   }, [userState.isAuthenticated, handleNearMeClick]);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-    };
-  }, []);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
@@ -478,55 +477,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     }
   };
 
-  const handlePermissionGranted = async () => {
-    setHasLocationPermission(true);
-    setShowPermissionDialog(false);
-
-    if (auth.currentUser) {
-      try {
-        const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
-        await setDoc(
-          userPrefRef,
-          {
-            locationPermission: true,
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-      } catch (error) {
-        logError(error, 'map_permission_save_error');
-        // Mesmo com erro ao salvar, continuamos com a geolocalização
-      }
-    }
-
-    proceedWithGeolocation();
-  };
-
-  const handlePermissionDenied = async () => {
-    setHasLocationPermission(false);
-    setShowPermissionDialog(false);
-
-    if (auth.currentUser) {
-      try {
-        const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
-        await setDoc(
-          userPrefRef,
-          {
-            locationPermission: false,
-            updatedAt: new Date(),
-          },
-          { merge: true }
-        );
-      } catch (error) {
-        logError(error, 'map_permission_save_error');
-      }
-    }
-
-    NotificationService.error(
-      'Para usar a funcionalidade "Próximo a Mim", precisamos que você permita o seu navegador a acessar sua localização.'
-    );
-  };
-
   if (loadError || !isLoaded) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -593,19 +543,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
           </InfoWindow>
         )}
       </GoogleMap>
-
-      {showPermissionDialog &&
-        (isMobile ? (
-          <LocationPermissionDialogMobile
-            onPermissionGranted={handlePermissionGranted}
-            onPermissionDenied={handlePermissionDenied}
-          />
-        ) : (
-          <LocationPermissionDialog
-            onPermissionGranted={handlePermissionGranted}
-            onPermissionDenied={handlePermissionDenied}
-          />
-        ))}
 
       <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
         {!isAddingPlace ? (

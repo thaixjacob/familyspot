@@ -89,7 +89,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
         if (!google.maps.geometry || !google.maps.geometry.spherical) {
           NotificationService.error(
-            'Biblioteca de geometria não está disponível. Por favor, tente novamente.'
+            'Ops! Parece que estamos com um problema técnico. Por favor, tente novamente em alguns instantes.'
           );
           setIsLocationLoading(false);
           return;
@@ -112,9 +112,13 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         // Só mostra as notificações se o usuário estiver autenticado
         if (userState.isAuthenticated) {
           if (nearby.length === 0) {
-            NotificationService.info('Nenhum lugar encontrado. Que tal adicionar um novo lugar?');
+            NotificationService.info(
+              'Não encontramos lugares próximos a você. Que tal adicionar um novo lugar para ajudar outras famílias?'
+            );
           } else {
-            NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
+            NotificationService.success(
+              `Ótimo! Encontramos ${nearby.length} lugares próximos a você!`
+            );
           }
         }
 
@@ -124,7 +128,9 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         logError(error, 'map_geolocation_error');
         // Só mostra o erro se o usuário estiver autenticado
         if (userState.isAuthenticated) {
-          NotificationService.error('Não foi possível obter sua localização:', error.message);
+          NotificationService.error(
+            'Não conseguimos acessar sua localização. Verifique se o GPS está ativado e se você permitiu o acesso à localização.'
+          );
         }
         setIsNearbyMode(false);
         setIsLocationLoading(false);
@@ -182,7 +188,9 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       }
 
       if (!navigator.geolocation) {
-        NotificationService.error('Geolocalização não é suportada pelo seu navegador');
+        NotificationService.error(
+          'Parece que seu navegador não suporta geolocalização. Tente usar um navegador mais recente.'
+        );
         return;
       }
 
@@ -514,7 +522,9 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       }
     }
 
-    NotificationService.error('A funcionalidade "Próximo a Mim" requer permissão de localização.');
+    NotificationService.error(
+      'Para usar a funcionalidade "Próximo a Mim", precisamos que você permita o seu navegador a acessar sua localização.'
+    );
   };
 
   if (loadError || !isLoaded) {

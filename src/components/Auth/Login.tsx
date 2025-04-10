@@ -69,6 +69,9 @@ const Login = () => {
       setError('');
       const response = await authService.login({ email, password });
 
+      // Aguardar um momento para garantir que a autenticação foi completada
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       dispatch({
         type: 'LOGIN',
         payload: {

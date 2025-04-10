@@ -7,7 +7,7 @@ service cloud.firestore {
     
     // Users collection
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && request.auth.uid == userId;
       allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
     
@@ -21,6 +21,13 @@ service cloud.firestore {
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if false; // Manage through Firebase console for MVP
+    }
+
+    // User Preferences collection
+    match /userPreferences/{userId} {
+      allow read: if isSignedIn(); // Permitir leitura para qualquer usuário autenticado
+      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn();
     }
   }
 }

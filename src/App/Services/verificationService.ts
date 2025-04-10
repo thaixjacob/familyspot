@@ -30,82 +30,110 @@ import {
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { Verification } from '../../types';
+import type { Verification } from '../../types/Verification';
 
-// Verify a place
-export const verifyPlace = async (placeId: string, userId: string) => {
-  // Check if user has already verified this place
-  const placeRef = doc(db, 'places', placeId);
-  const placeSnap = await getDoc(placeRef);
+export class VerificationService {
+  static async verifyPlace(placeId: string, userId: string): Promise<void> {
+    if (!placeId || !userId) {
+      throw new Error('Place ID and User ID are required');
+    }
 
-  if (!placeSnap.exists()) {
-    throw new Error('Place not found');
+    const placeRef = doc(db, 'places', placeId);
+    const placeSnap = await getDoc(placeRef);
+
+    if (!placeSnap.exists()) {
+      throw new Error('Local não encontrado');
+    }
+
+    const placeData = placeSnap.data();
+
+    if (placeData.verifiedBy && placeData.verifiedBy.includes(userId)) {
+      throw new Error('Você já verificou este local');
+    }
+
+    await updateDoc(placeRef, {
+      verifications: increment(1),
+      verifiedBy: arrayUnion(userId),
+    });
   }
 
-  const placeData = placeSnap.data();
+  static async getVerificationCount(placeId: string): Promise<number> {
+    if (!placeId) {
+      throw new Error('Place ID is required');
+    }
 
-  // If user has already verified, don't allow duplicate verification
-  if (placeData.verifiedBy && placeData.verifiedBy.includes(userId)) {
-    throw new Error('You have already verified this place');
+    const placeRef = doc(db, 'places', placeId);
+    const placeSnap = await getDoc(placeRef);
+
+    if (!placeSnap.exists()) {
+      throw new Error('Local não encontrado');
+    }
+
+    return placeSnap.data().verifications || 0;
   }
 
-  // Update verification count and add user to verifiedBy array
-  return await updateDoc(placeRef, {
-    verifications: increment(1),
-    verifiedBy: arrayUnion(userId),
-  });
-};
+  static async getVerificationsByPlaceId(placeId: string): Promise<Verification[]> {
+    if (!placeId) {
+      throw new Error('Place ID is required');
+    }
 
-// Get verification count for a place
-export const getVerificationCount = async (placeId: string) => {
-  const placeRef = doc(db, 'places', placeId);
-  const placeSnap = await getDoc(placeRef);
-
-  if (!placeSnap.exists()) {
-    throw new Error('Place not found');
-  }
-
-  return placeSnap.data().verifications || 0;
-};
-
-export const VerificationService = {
-  async getVerificationsByPlaceId(placeId: string): Promise<Verification[]> {
     const verificationsRef = collection(db, 'verifications');
     const q = query(verificationsRef, where('placeId', '==', placeId));
     const verificationsSnapshot = await getDocs(q);
+
     return verificationsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as Verification[];
-  },
+  }
 
-  async getVerificationsByUserId(userId: string): Promise<Verification[]> {
+  static async getVerificationsByUserId(userId: string): Promise<Verification[]> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
     const verificationsRef = collection(db, 'verifications');
     const q = query(verificationsRef, where('userId', '==', userId));
     const verificationsSnapshot = await getDocs(q);
+
     return verificationsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as Verification[];
-  },
+  }
 
-  async addVerification(verification: Omit<Verification, 'id'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'verifications'), verification);
+  static async addVerification(verification: Omit<Verification, 'id'>): Promise<string> {
+    if (!verification.placeId || !verification.userId) {
+      throw new Error('Place ID and User ID are required');
+    }
+
+    const docRef = await addDoc(collection(db, 'verifications'), {
+      ...verification,
+      date: verification.date || new Date(),
+    });
     return docRef.id;
-  },
+  }
 
-  async updateVerificationStatus(
+  static async updateVerificationStatus(
     id: string,
     status: Verification['status'],
     comment?: string
   ): Promise<void> {
+    if (!id) {
+      throw new Error('Verification ID is required');
+    }
+
     const verificationRef = doc(db, 'verifications', id);
     const verificationDoc = await getDoc(verificationRef);
-    if (!verificationDoc.exists()) throw new Error('Verification not found');
+
+    if (!verificationDoc.exists()) {
+      throw new Error('Verificação não encontrada');
+    }
 
     await updateDoc(verificationRef, {
       status,
       ...(comment && { comment }),
+      updatedAt: new Date(),
     });
-  },
-};
+  }
+}

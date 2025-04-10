@@ -54,7 +54,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     accessibility: false,
     kidsMenu: false,
   });
-  // Adicionar estados para nome personalizado
   const [isCustomNameRequired, setIsCustomNameRequired] = useState(false);
   const [customPlaceName, setCustomPlaceName] = useState('');
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -66,6 +65,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   const lastClickTime = useRef<number>(0);
   const COOLDOWN_DURATION = 30000; // 30 segundos em milissegundos
   const [isMobile, setIsMobile] = useState(false);
+  const locationCheckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
@@ -77,7 +77,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   const proceedWithGeolocation = useCallback(() => {
     setIsLocationLoading(true);
     setIsNearbyMode(true);
-    lastClickTime.current = Date.now();
 
     navigator.geolocation.getCurrentPosition(
       position => {
@@ -110,17 +109,23 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
 
         setNearbyPlaces(nearby);
 
-        if (nearby.length === 0) {
-          NotificationService.info('Nenhum lugar encontrado. Que tal adicionar um novo lugar?');
-        } else {
-          NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
+        // Só mostra as notificações se o usuário estiver autenticado
+        if (userState.isAuthenticated) {
+          if (nearby.length === 0) {
+            NotificationService.info('Nenhum lugar encontrado. Que tal adicionar um novo lugar?');
+          } else {
+            NotificationService.success(`Encontramos ${nearby.length} lugares próximos a você!`);
+          }
         }
 
         setIsLocationLoading(false);
       },
       error => {
         logError(error, 'map_geolocation_error');
-        NotificationService.error('Não foi possível obter sua localização:', error.message);
+        // Só mostra o erro se o usuário estiver autenticado
+        if (userState.isAuthenticated) {
+          NotificationService.error('Não foi possível obter sua localização:', error.message);
+        }
         setIsNearbyMode(false);
         setIsLocationLoading(false);
       },
@@ -130,7 +135,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         maximumAge: 0,
       }
     );
-  }, [places]);
+  }, [places, userState.isAuthenticated]);
 
   const checkBrowserPermission = useCallback(async () => {
     try {
@@ -160,16 +165,20 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
   }, [userState.isAuthenticated]);
 
   const handleNearMeClick = useCallback(
-    async (hasPermission = false) => {
-      const now = Date.now();
-      const timeSinceLastClick = now - lastClickTime.current;
+    async (hasPermission = false, isManualClick = false) => {
+      if (isManualClick) {
+        const now = Date.now();
+        const timeSinceLastClick = now - lastClickTime.current;
 
-      if (timeSinceLastClick < COOLDOWN_DURATION) {
-        const remainingTime = Math.ceil((COOLDOWN_DURATION - timeSinceLastClick) / 1000);
-        NotificationService.warning(
-          `Por favor, aguarde ${remainingTime} segundos antes de tentar novamente.`
-        );
-        return;
+        if (timeSinceLastClick < COOLDOWN_DURATION && userState.isAuthenticated) {
+          const remainingTime = Math.ceil((COOLDOWN_DURATION - timeSinceLastClick) / 1000);
+          NotificationService.warning(
+            `Por favor, aguarde ${remainingTime} segundos antes de tentar novamente.`
+          );
+          return;
+        }
+
+        lastClickTime.current = now;
       }
 
       if (!navigator.geolocation) {
@@ -195,14 +204,32 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       // Se chegou aqui, precisamos mostrar o diálogo
       setShowPermissionDialog(true);
     },
-    [proceedWithGeolocation, hasLocationPermission, checkBrowserPermission]
+    [
+      proceedWithGeolocation,
+      hasLocationPermission,
+      checkBrowserPermission,
+      userState.isAuthenticated,
+    ]
   );
 
   useEffect(() => {
     const checkLocationPermission = async () => {
+      // Se o usuário não está autenticado, não fazemos nada
+      if (!userState.isAuthenticated) {
+        return;
+      }
+
+      // Se já temos um ID de verificação, não fazemos nada
+      if (locationCheckIdRef.current) {
+        return;
+      }
+
+      // Gerar um novo ID de verificação
+      locationCheckIdRef.current = Date.now().toString();
+
       try {
         // Se o usuário estiver autenticado, verificar primeiro a permissão no Firestore
-        if (userState.isAuthenticated && auth.currentUser) {
+        if (auth.currentUser) {
           try {
             const userPrefRef = doc(db, 'userPreferences', auth.currentUser.uid);
             const userPrefDoc = await getDoc(userPrefRef);
@@ -218,7 +245,8 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             const userData = userPrefDoc.data();
 
             if (userData.locationPermission) {
-              handleNearMeClick(true);
+              // Só aciona a funcionalidade "Próximo a Mim" se o usuário estiver autenticado
+              handleNearMeClick(true, false);
               return true;
             }
           } catch (firestoreError) {
@@ -231,7 +259,8 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         const permission = await navigator.permissions.query({ name: 'geolocation' });
 
         if (permission.state === 'granted') {
-          handleNearMeClick(true);
+          // Só aciona a funcionalidade "Próximo a Mim" se o usuário estiver autenticado
+          handleNearMeClick(true, false);
           return true;
         }
 
@@ -600,7 +629,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
                   {userState.isAuthenticated ? 'Adicionar Local' : 'Faça login para adicionar'}
                 </button>
                 <button
-                  onClick={() => handleNearMeClick()}
+                  onClick={() => handleNearMeClick(false, true)}
                   className={`px-4 py-2 rounded-md ${
                     isLocationLoading
                       ? 'bg-gray-400 cursor-not-allowed'

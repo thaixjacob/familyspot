@@ -14,7 +14,11 @@ export interface FilterValues {
   };
 }
 
-const FilterPanel = () => {
+interface FilterPanelProps {
+  onApplyFiltersInView?: () => void;
+}
+
+const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
   const { filters, setFilters, clearFilters } = useFilter();
 
   const handleAgeGroupChange = (age: string) => {
@@ -51,9 +55,19 @@ const FilterPanel = () => {
     <div className="bg-white rounded-lg shadow-md p-5 max-w-md">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-semibold text-gray-800">Filtros</h3>
-        <button onClick={clearFilters} className="text-sm text-blue-600 hover:text-blue-800">
-          Limpar Filtros
-        </button>
+        <div className="flex space-x-2">
+          <button onClick={clearFilters} className="text-sm text-blue-600 hover:text-blue-800">
+            Limpar Filtros
+          </button>
+          {onApplyFiltersInView && (
+            <button
+              onClick={onApplyFiltersInView}
+              className="text-sm text-purple-600 hover:text-purple-800"
+            >
+              Aplicar na Região
+            </button>
+          )}
+        </div>
       </div>
 
       {(filters.ageGroups.length > 0 ||

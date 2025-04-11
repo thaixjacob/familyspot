@@ -165,6 +165,10 @@ function AppContent() {
     setFilteredPlaces(prev => [...prev, newPlace]);
   };
 
+  const handlePlaceFiltered = (places: Place[]) => {
+    setFilteredPlaces(places);
+  };
+
   return (
     <Routes>
       <Route path="/signup" element={<SignUp />} />
@@ -184,6 +188,8 @@ function AppContent() {
                 filteredPlaces={filteredPlaces}
                 isLoading={isLoading}
                 onPlaceAdded={handlePlaceAdded}
+                onPlaceFiltered={handlePlaceFiltered}
+                places={allPlaces}
               />
             )}
           </PrivateRoute>

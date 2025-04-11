@@ -1,17 +1,18 @@
 import React from 'react';
-import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
+import { Place } from '../../types/Place';
+import { UserState } from '../../App/ContextProviders/UserContext';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 interface MapControlsProps {
   isAddingPlace: boolean;
   isLocationLoading: boolean;
   isNearbyMode: boolean;
-  nearbyPlaces: any[];
-  userState: {
-    isAuthenticated: boolean;
-  };
+  nearbyPlaces: Place[];
+  userState: UserState;
   onAddPlaceClick: () => void;
   onNearMeClick: () => void;
+  onApplyFiltersInView: () => void;
 }
 
 const MapControls: React.FC<MapControlsProps> = ({
@@ -22,6 +23,7 @@ const MapControls: React.FC<MapControlsProps> = ({
   userState,
   onAddPlaceClick,
   onNearMeClick,
+  onApplyFiltersInView,
 }) => {
   if (isAddingPlace) return null;
 
@@ -71,6 +73,12 @@ const MapControls: React.FC<MapControlsProps> = ({
             ) : (
               'Próximo a Mim'
             )}
+          </button>
+          <button
+            onClick={onApplyFiltersInView}
+            className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700"
+          >
+            Aplicar Filtros na Região
           </button>
         </div>
         {isNearbyMode && nearbyPlaces.length > 0 && (

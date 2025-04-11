@@ -15,7 +15,7 @@
 import React, { createContext, useContext, useReducer } from 'react';
 
 // Definir os tipos
-type UserState = {
+export type UserState = {
   displayName: string | null;
   email: string | null;
   isAuthenticated: boolean;

@@ -26,7 +26,7 @@
  * - Integração com o mapa para visualização geográfica
  */
 
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
 import { Place } from '../../types/Place';
@@ -41,6 +41,8 @@ interface MainLayoutProps {
   filteredPlaces: Place[];
   isLoading: boolean;
   onPlaceAdded: (newPlace: Place) => void;
+  onPlaceFiltered: (places: Place[]) => void;
+  places: Place[];
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({
@@ -49,7 +51,36 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   filteredPlaces,
   isLoading,
   onPlaceAdded,
+  onPlaceFiltered,
+  places,
 }) => {
+  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+  const [currentPlaces, setCurrentPlaces] = useState<Place[]>(filteredPlaces);
+
+  const handleApplyFiltersInView = useCallback(() => {
+    if (!mapRef) return;
+
+    const bounds = mapRef.getBounds();
+    if (!bounds) return;
+
+    const filteredPlaces = places.filter(place => {
+      const { latitude, longitude } = place.location;
+      return (
+        latitude >= bounds.getSouthWest().lat() &&
+        latitude <= bounds.getNorthEast().lat() &&
+        longitude >= bounds.getSouthWest().lng() &&
+        longitude <= bounds.getNorthEast().lng()
+      );
+    });
+
+    setCurrentPlaces(filteredPlaces);
+    onPlaceFiltered(filteredPlaces);
+  }, [mapRef, places, onPlaceFiltered]);
+
+  useEffect(() => {
+    setCurrentPlaces(filteredPlaces);
+  }, [filteredPlaces]);
+
   return (
     <div className="flex flex-col h-screen">
       <Header showWelcome={showWelcome} setShowWelcome={setShowWelcome} />
@@ -57,20 +88,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar with filters and place cards */}
         <div className="w-96 bg-gray-50 p-4 overflow-y-auto flex flex-col">
-          <FilterPanel />
+          <FilterPanel onApplyFiltersInView={handleApplyFiltersInView} />
 
           <div className="mt-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">
-              Places ({filteredPlaces.length})
+              Places ({currentPlaces.length})
             </h2>
             {isLoading ? (
               <div className="text-center py-6 text-gray-500">
                 <LoadingSpinner size="md" color="text-blue-500" />
                 <p className="mt-2">Carregando lugares...</p>
               </div>
-            ) : filteredPlaces.length > 0 ? (
+            ) : currentPlaces.length > 0 ? (
               <div className="space-y-4">
-                {filteredPlaces.map(place => (
+                {currentPlaces.map(place => (
                   <PlaceCardSummary key={place.id} place={place} />
                 ))}
               </div>
@@ -84,7 +115,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
         {/* Map area */}
         <div className="flex-1 h-full">
-          <Map places={filteredPlaces} onPlaceAdded={onPlaceAdded} />
+          <Map places={currentPlaces} onPlaceAdded={onPlaceAdded} onMapLoad={setMapRef} />
         </div>
       </div>
 

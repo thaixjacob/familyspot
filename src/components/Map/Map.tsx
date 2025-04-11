@@ -8,13 +8,20 @@ import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
 import { auth } from '../../firebase/config';
 import { logError } from '../../utils/logger';
-import type { MapProps, MapState } from './types';
+import { Place } from '../../types/Place';
+import { MapState } from './types';
 import { mapContainerStyle, center, libraries } from './styles';
 import { mapGoogleTypesToCategory, calculateNearbyPlaces, getPlaceDetails } from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 
-const Map = ({ places = [], onPlaceAdded }: MapProps) => {
+interface MapProps {
+  places: Place[];
+  onPlaceAdded: (newPlace: Place) => void;
+  onMapLoad?: (map: google.maps.Map) => void;
+}
+
+const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
   const [state, setState] = useState<MapState>({
     selectedPlace: null,
     newPin: null,
@@ -40,6 +47,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     isNearbyMode: false,
     hasLocationPermission: null,
     isLocationLoading: false,
+    currentMapBounds: null,
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -233,9 +241,33 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     libraries: libraries as ('places' | 'drawing' | 'geometry' | 'visualization')[],
   });
 
-  const onMapLoad = useCallback((map: google.maps.Map) => {
-    placesServiceRef.current = new google.maps.places.PlacesService(map);
-  }, []);
+  const handleMapLoad = useCallback(
+    (map: google.maps.Map) => {
+      placesServiceRef.current = new google.maps.places.PlacesService(map);
+
+      // Adiciona listener para mudanças na região do mapa
+      map.addListener('bounds_changed', () => {
+        const bounds = map.getBounds();
+        if (bounds) {
+          setState(prev => ({
+            ...prev,
+            currentMapBounds: {
+              north: bounds.getNorthEast().lat(),
+              south: bounds.getSouthWest().lat(),
+              east: bounds.getNorthEast().lng(),
+              west: bounds.getSouthWest().lng(),
+            },
+          }));
+        }
+      });
+
+      // Chama o callback onMapLoad se fornecido
+      if (onMapLoad) {
+        onMapLoad(map);
+      }
+    },
+    [onMapLoad]
+  );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {
     if (!state.isAddingPlace || !placesServiceRef.current) return;
@@ -362,6 +394,33 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     }
   };
 
+  const filterPlacesInView = useCallback(() => {
+    if (!state.currentMapBounds) return;
+
+    const filteredPlaces = places.filter(place => {
+      const { latitude, longitude } = place.location;
+      return (
+        latitude >= state.currentMapBounds!.south &&
+        latitude <= state.currentMapBounds!.north &&
+        longitude >= state.currentMapBounds!.west &&
+        longitude <= state.currentMapBounds!.east
+      );
+    });
+
+    setState(prev => ({
+      ...prev,
+      nearbyPlaces: filteredPlaces,
+      isNearbyMode: true,
+      selectedPlace: null,
+    }));
+
+    if (filteredPlaces.length === 0) {
+      NotificationService.info('Não há lugares nesta região que correspondam aos seus filtros.');
+    } else {
+      NotificationService.success(`Encontramos ${filteredPlaces.length} lugares nesta região!`);
+    }
+  }, [places, state.currentMapBounds]);
+
   if (loadError || !isLoaded) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -380,9 +439,9 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         zoom={13}
         center={state.userLocation || center}
         onClick={handleMapClick}
-        onLoad={onMapLoad}
+        onLoad={handleMapLoad}
       >
-        {(state.isNearbyMode ? state.nearbyPlaces : places).map(place => (
+        {places.map(place => (
           <Marker
             key={place.id}
             position={{
@@ -439,6 +498,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             userState={userState}
             onAddPlaceClick={() => setState(prev => ({ ...prev, isAddingPlace: true }))}
             onNearMeClick={() => handleNearMeClick(false, true)}
+            onApplyFiltersInView={filterPlacesInView}
           />
         ) : (
           <ErrorBoundary

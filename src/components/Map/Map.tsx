@@ -43,7 +43,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     isCustomNameRequired: false,
     customPlaceName: '',
     userLocation: null,
-    nearbyPlaces: [],
+    nearbyPlaces: places,
     isNearbyMode: false,
     hasLocationPermission: null,
     isLocationLoading: false,
@@ -249,15 +249,19 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
       map.addListener('bounds_changed', () => {
         const bounds = map.getBounds();
         if (bounds) {
-          setState(prev => ({
-            ...prev,
-            currentMapBounds: {
-              north: bounds.getNorthEast().lat(),
-              south: bounds.getSouthWest().lat(),
-              east: bounds.getNorthEast().lng(),
-              west: bounds.getSouthWest().lng(),
-            },
-          }));
+          const northEast = bounds.getNorthEast();
+          const southWest = bounds.getSouthWest();
+          if (northEast && southWest) {
+            setState(prev => ({
+              ...prev,
+              currentMapBounds: {
+                north: northEast.lat(),
+                south: southWest.lat(),
+                east: northEast.lng(),
+                west: southWest.lng(),
+              },
+            }));
+          }
         }
       });
 
@@ -354,7 +358,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
       const placeWithId = { ...newPlace, id: docRef.id };
 
       if (onPlaceAdded) {
-        onPlaceAdded(placeWithId as any);
+        onPlaceAdded(placeWithId as Place);
       }
 
       setState(prev => ({
@@ -394,33 +398,6 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     }
   };
 
-  const filterPlacesInView = useCallback(() => {
-    if (!state.currentMapBounds) return;
-
-    const filteredPlaces = places.filter(place => {
-      const { latitude, longitude } = place.location;
-      return (
-        latitude >= state.currentMapBounds!.south &&
-        latitude <= state.currentMapBounds!.north &&
-        longitude >= state.currentMapBounds!.west &&
-        longitude <= state.currentMapBounds!.east
-      );
-    });
-
-    setState(prev => ({
-      ...prev,
-      nearbyPlaces: filteredPlaces,
-      isNearbyMode: true,
-      selectedPlace: null,
-    }));
-
-    if (filteredPlaces.length === 0) {
-      NotificationService.info('Não há lugares nesta região que correspondam aos seus filtros.');
-    } else {
-      NotificationService.success(`Encontramos ${filteredPlaces.length} lugares nesta região!`);
-    }
-  }, [places, state.currentMapBounds]);
-
   if (loadError || !isLoaded) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -441,16 +418,27 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         onClick={handleMapClick}
         onLoad={handleMapLoad}
       >
-        {places.map(place => (
-          <Marker
-            key={place.id}
-            position={{
-              lat: place.location.latitude,
-              lng: place.location.longitude,
-            }}
-            onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
-          />
-        ))}
+        {state.isNearbyMode
+          ? state.nearbyPlaces.map(place => (
+              <Marker
+                key={place.id}
+                position={{
+                  lat: place.location.latitude,
+                  lng: place.location.longitude,
+                }}
+                onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+              />
+            ))
+          : places.map(place => (
+              <Marker
+                key={place.id}
+                position={{
+                  lat: place.location.latitude,
+                  lng: place.location.longitude,
+                }}
+                onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+              />
+            ))}
 
         {state.userLocation && (
           <Marker
@@ -493,12 +481,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
           <MapControls
             isAddingPlace={state.isAddingPlace}
             isLocationLoading={state.isLocationLoading}
-            isNearbyMode={state.isNearbyMode}
-            nearbyPlaces={state.nearbyPlaces}
             userState={userState}
             onAddPlaceClick={() => setState(prev => ({ ...prev, isAddingPlace: true }))}
             onNearMeClick={() => handleNearMeClick(false, true)}
-            onApplyFiltersInView={filterPlacesInView}
           />
         ) : (
           <ErrorBoundary

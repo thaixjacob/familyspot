@@ -111,14 +111,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     setCurrentPlaces(filteredPlaces);
     onPlaceFiltered(filteredPlaces);
 
-    // Mostrar resultados filtrados apenas se houver filtros ativos
+    // Mostrar resultados filtrados quando houver filtros ativos OU quando estiver mostrando todos os lugares
     const hasActiveFilters =
-      filters.category !== 'all' ||
       filters.ageGroups.length > 0 ||
       filters.priceRange.length > 0 ||
       Object.values(filters.amenities).some(value => value);
 
-    setShowFilteredResults(hasActiveFilters);
+    // Mostrar a lista se houver filtros ativos OU se houver lugares visíveis no mapa
+    setShowFilteredResults(hasActiveFilters || filteredPlaces.length > 0);
   }, [mapRef, places, filters, onPlaceFiltered]);
 
   return (

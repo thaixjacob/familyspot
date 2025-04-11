@@ -347,6 +347,11 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       }));
 
       NotificationService.success('Local adicionado com sucesso!');
+
+      if (state.isNearbyMode && state.userLocation) {
+        const nearby = calculateNearbyPlaces(state.userLocation, [...places, placeWithId]);
+        setState(prev => ({ ...prev, nearbyPlaces: nearby }));
+      }
     } catch (error) {
       logError(error, 'map_permission_save_error');
       NotificationService.error(

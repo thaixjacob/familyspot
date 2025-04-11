@@ -417,6 +417,15 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         center={state.userLocation || center}
         onClick={handleMapClick}
         onLoad={handleMapLoad}
+        options={{
+          styles: [
+            {
+              featureType: 'poi',
+              elementType: 'labels',
+              stylers: [{ visibility: 'on' }],
+            },
+          ],
+        }}
       >
         {places.map(place => (
           <Marker
@@ -426,6 +435,13 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
               lng: place.location.longitude,
             }}
             onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+            icon={{
+              url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40),
+            }}
+            animation={google.maps.Animation.DROP}
+            zIndex={1000}
           />
         ))}
 
@@ -434,7 +450,10 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
             position={state.userLocation}
             icon={{
               url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40),
             }}
+            zIndex={1000}
           />
         )}
 
@@ -444,7 +463,10 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
             animation={google.maps.Animation.DROP}
             icon={{
               url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40),
             }}
+            zIndex={1000}
           />
         )}
 

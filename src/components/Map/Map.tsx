@@ -418,27 +418,16 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         onClick={handleMapClick}
         onLoad={handleMapLoad}
       >
-        {state.isNearbyMode
-          ? state.nearbyPlaces.map(place => (
-              <Marker
-                key={place.id}
-                position={{
-                  lat: place.location.latitude,
-                  lng: place.location.longitude,
-                }}
-                onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
-              />
-            ))
-          : places.map(place => (
-              <Marker
-                key={place.id}
-                position={{
-                  lat: place.location.latitude,
-                  lng: place.location.longitude,
-                }}
-                onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
-              />
-            ))}
+        {places.map(place => (
+          <Marker
+            key={place.id}
+            position={{
+              lat: place.location.latitude,
+              lng: place.location.longitude,
+            }}
+            onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+          />
+        ))}
 
         {state.userLocation && (
           <Marker

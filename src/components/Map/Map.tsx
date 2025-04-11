@@ -81,11 +81,11 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         if (userState.isAuthenticated) {
           if (nearby.length === 0) {
             NotificationService.info(
-              'Não encontramos lugares próximos a você. Que tal adicionar um novo lugar para ajudar outras famílias?'
+              'Não encontramos lugares próximos a você em um raio de 10km. Você pode tentar aumentar o zoom do mapa para ver mais lugares ou adicionar um novo lugar para ajudar outras famílias!'
             );
           } else {
             NotificationService.success(
-              `Ótimo! Encontramos ${nearby.length} lugares próximos a você!`
+              `Ótimo! Encontramos ${nearby.length} lugares próximos a você em um raio de 10km!`
             );
           }
         }

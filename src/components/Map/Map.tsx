@@ -63,6 +63,14 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     }
   }, []);
 
+  useEffect(() => {
+    // Garante que todos os pins estejam visíveis inicialmente
+    setState(prevState => ({
+      ...prevState,
+      nearbyPlaces: places,
+    }));
+  }, [places]);
+
   const proceedWithGeolocation = useCallback(() => {
     setState(prev => ({ ...prev, isLocationLoading: true, isNearbyMode: true }));
 

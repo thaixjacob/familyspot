@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useLoadScript, Marker, InfoWindow, Circle } from '@react-google-maps/api';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
 import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
@@ -433,7 +433,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     <div className="h-screen w-full relative">
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
-        zoom={13}
+        zoom={state.userLocation ? 15 : 8}
         center={state.userLocation || center}
         onClick={handleMapClick}
         onLoad={handleMapLoad}
@@ -471,15 +471,31 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         ))}
 
         {state.userLocation && (
-          <Marker
-            position={state.userLocation}
-            icon={{
-              url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-              scaledSize: new google.maps.Size(40, 40),
-              anchor: new google.maps.Point(20, 40),
-            }}
-            zIndex={1000}
-          />
+          <>
+            <Marker
+              position={state.userLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 6,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                strokeColor: 'white',
+                strokeWeight: 2,
+              }}
+              zIndex={1000}
+            />
+            <Circle
+              center={state.userLocation}
+              radius={50}
+              options={{
+                strokeColor: '#4285F4',
+                strokeOpacity: 0.8,
+                strokeWeight: 1,
+                fillColor: '#4285F4',
+                fillOpacity: 0.15,
+              }}
+            />
+          </>
         )}
 
         {state.newPin && (

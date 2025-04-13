@@ -253,6 +253,18 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     (map: google.maps.Map) => {
       placesServiceRef.current = new google.maps.places.PlacesService(map);
 
+      // Ajusta o zoom e centralização para mostrar todos os pins
+      if (places.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        places.forEach(place => {
+          bounds.extend({
+            lat: place.location.latitude,
+            lng: place.location.longitude,
+          });
+        });
+        map.fitBounds(bounds);
+      }
+
       // Adiciona listener para mudanças na região do mapa
       map.addListener('bounds_changed', () => {
         const bounds = map.getBounds();
@@ -278,7 +290,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         onMapLoad(map);
       }
     },
-    [onMapLoad]
+    [onMapLoad, places]
   );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {
@@ -433,6 +445,11 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
               stylers: [{ visibility: 'on' }],
             },
           ],
+          gestureHandling: 'greedy',
+          fullscreenControl: true,
+          zoomControl: true,
+          streetViewControl: true,
+          mapTypeControl: true,
         }}
       >
         {places.map(place => (

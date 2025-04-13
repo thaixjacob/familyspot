@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useFilter } from '../../App/ContextProviders/FilterContext';
 
 export interface FilterValues {
@@ -20,10 +20,6 @@ interface FilterPanelProps {
 
 const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
   const { filters, setFilters, clearFilters } = useFilter();
-
-  useEffect(() => {
-    setFilters({ ...filters, category: 'all' });
-  }, [filters, setFilters]);
 
   const handleAgeGroupChange = (age: string) => {
     const newFilters = {

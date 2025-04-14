@@ -19,9 +19,10 @@ interface MapProps {
   places: Place[];
   onPlaceAdded: (newPlace: Place) => void;
   onMapLoad?: (map: google.maps.Map) => void;
+  onNearbyPlacesUpdate?: (places: Place[]) => void;
 }
 
-const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
+const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: MapProps) => {
   const [state, setState] = useState<MapState>({
     selectedPlace: null,
     newPin: null,
@@ -43,7 +44,8 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
     isCustomNameRequired: false,
     customPlaceName: '',
     userLocation: null,
-    nearbyPlaces: places,
+    allPlaces: places,
+    nearbyPlaces: [],
     isNearbyMode: false,
     hasLocationPermission: null,
     isLocationLoading: false,
@@ -84,7 +86,16 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         setState(prev => ({ ...prev, userLocation: userPos }));
 
         const nearby = calculateNearbyPlaces(userPos, places);
-        setState(prev => ({ ...prev, nearbyPlaces: nearby, isLocationLoading: false }));
+
+        setState(prev => ({
+          ...prev,
+          nearbyPlaces: nearby,
+          isLocationLoading: false,
+        }));
+
+        if (onNearbyPlacesUpdate) {
+          onNearbyPlacesUpdate(nearby);
+        }
 
         if (userState.isAuthenticated) {
           if (nearby.length === 0) {
@@ -113,7 +124,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
         maximumAge: 0,
       }
     );
-  }, [places, userState.isAuthenticated]);
+  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate]);
 
   const checkBrowserPermission = useCallback(async () => {
     try {

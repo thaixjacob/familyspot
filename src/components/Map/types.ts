@@ -2,7 +2,8 @@ import { Place } from '../../types/Place';
 
 export interface MapProps {
   places: Place[];
-  onPlaceAdded?: (place: Place) => void;
+  onPlaceAdded: (newPlace: Place) => void;
+  onMapLoad?: (map: google.maps.Map) => void;
 }
 
 export interface NewPlaceDetails {
@@ -21,21 +22,37 @@ export interface PlaceAmenities {
 
 export interface MapState {
   selectedPlace: Place | null;
-  newPin: google.maps.LatLngLiteral | null;
-  newPlaceDetails: NewPlaceDetails | null;
+  newPin: { lat: number; lng: number } | null;
+  newPlaceDetails: {
+    name: string;
+    address: string;
+    place_id: string;
+  } | null;
   newPlaceCategory: string;
   newPlaceAgeGroups: string[];
   newPlacePriceRange: string;
   newPlaceActivityType: string;
-  newPlaceAmenities: PlaceAmenities;
+  newPlaceAmenities: {
+    changingTables: boolean;
+    playAreas: boolean;
+    highChairs: boolean;
+    accessibility: boolean;
+    kidsMenu: boolean;
+  };
   isAddingPlace: boolean;
   isLoadingPlaceDetails: boolean;
   categoryDetected: boolean;
   isCustomNameRequired: boolean;
   customPlaceName: string;
-  userLocation: google.maps.LatLngLiteral | null;
+  userLocation: { lat: number; lng: number } | null;
   nearbyPlaces: Place[];
   isNearbyMode: boolean;
   hasLocationPermission: boolean | null;
   isLocationLoading: boolean;
+  currentMapBounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null;
 }

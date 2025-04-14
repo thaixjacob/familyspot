@@ -14,37 +14,56 @@ export interface FilterValues {
   };
 }
 
-const FilterPanel = () => {
+interface FilterPanelProps {
+  onApplyFiltersInView?: () => void;
+}
+
+const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
   const { filters, setFilters, clearFilters } = useFilter();
 
   const handleAgeGroupChange = (age: string) => {
-    setFilters({
+    const newFilters = {
       ...filters,
       ageGroups: filters.ageGroups.includes(age)
         ? filters.ageGroups.filter(a => a !== age)
         : [...filters.ageGroups, age],
-    });
+    };
+    setFilters(newFilters);
+    onApplyFiltersInView?.();
   };
 
   const handlePriceRangeChange = (price: string) => {
-    setFilters({
+    const newFilters = {
       ...filters,
       priceRange: filters.priceRange.includes(price)
         ? filters.priceRange.filter(p => p !== price)
         : [...filters.priceRange, price],
-    });
+    };
+    setFilters(newFilters);
+    onApplyFiltersInView?.();
   };
 
   const handleAmenityChange = (
     amenity: 'changingTables' | 'playAreas' | 'highChairs' | 'accessibility' | 'kidsMenu'
   ) => {
-    setFilters({
+    const newFilters = {
       ...filters,
       amenities: {
         ...filters.amenities,
         [amenity]: !filters.amenities[amenity],
       },
-    });
+    };
+    setFilters(newFilters);
+    onApplyFiltersInView?.();
+  };
+
+  const handleCategoryChange = (category: string) => {
+    const newFilters = {
+      ...filters,
+      category,
+    };
+    setFilters(newFilters);
+    onApplyFiltersInView?.();
   };
 
   return (
@@ -90,7 +109,7 @@ const FilterPanel = () => {
         <select
           id="category-select"
           value={filters.category}
-          onChange={e => setFilters({ ...filters, category: e.target.value })}
+          onChange={e => handleCategoryChange(e.target.value)}
           className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="all">Todas as Categorias</option>

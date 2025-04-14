@@ -12,22 +12,32 @@ export const mapGoogleTypesToCategory = (types: string[]): string | null => {
 export const calculateNearbyPlaces = (
   userPos: google.maps.LatLngLiteral,
   places: Place[],
-  maxDistance = 5000
+  maxDistance = 10000
 ): Place[] => {
   if (!google.maps.geometry || !google.maps.geometry.spherical) {
     logError(new Error('Google Maps geometry library not available'), 'map_geometry_error');
     return [];
   }
 
+  if (!places || places.length === 0) {
+    return [];
+  }
+
   return places.filter(place => {
+    if (!place.location || !place.location.latitude || !place.location.longitude) {
+      return false;
+    }
+
     const placePos = {
       lat: place.location.latitude,
       lng: place.location.longitude,
     };
+
     const distance = google.maps.geometry.spherical.computeDistanceBetween(
       new google.maps.LatLng(userPos.lat, userPos.lng),
       new google.maps.LatLng(placePos.lat, placePos.lng)
     );
+
     return distance <= maxDistance;
   });
 };

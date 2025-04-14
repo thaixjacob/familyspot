@@ -1,14 +1,13 @@
 import React from 'react';
-import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
+import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 
 interface MapControlsProps {
   isAddingPlace: boolean;
   isLocationLoading: boolean;
-  isNearbyMode: boolean;
-  nearbyPlaces: any[];
   userState: {
     isAuthenticated: boolean;
+    email: string | null;
   };
   onAddPlaceClick: () => void;
   onNearMeClick: () => void;
@@ -17,8 +16,6 @@ interface MapControlsProps {
 const MapControls: React.FC<MapControlsProps> = ({
   isAddingPlace,
   isLocationLoading,
-  isNearbyMode,
-  nearbyPlaces,
   userState,
   onAddPlaceClick,
   onNearMeClick,
@@ -73,11 +70,6 @@ const MapControls: React.FC<MapControlsProps> = ({
             )}
           </button>
         </div>
-        {isNearbyMode && nearbyPlaces.length > 0 && (
-          <div className="text-sm text-gray-600 mb-2">
-            Mostrando {nearbyPlaces.length} lugares próximos a você
-          </div>
-        )}
       </>
     </ErrorBoundary>
   );

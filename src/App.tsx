@@ -48,7 +48,7 @@ import PrivateRoute from './components/Auth/PrivateRoute';
 import { NotificationProvider } from './App/ContextProviders/NotificationContext';
 import { useNotification } from './App/ContextProviders/NotificationContext';
 import NotificationService from './App/Services/notificationService';
-import { FilterProvider, useFilter } from './App/ContextProviders/FilterContext';
+import { FilterProvider } from './App/ContextProviders/FilterContext';
 import SignUp from './components/Auth/SignUp';
 import Login from './components/Auth/Login';
 import MainLayout from './App/Layout/MainLayout';
@@ -57,14 +57,12 @@ import LoadingSpinner from './SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from './SharedComponents/ErrorBoundary/ErrorBoundary';
 
 function AppContent() {
-  const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
   const [allPlaces, setAllPlaces] = useState<Place[]>([]);
   const [showWelcome, setShowWelcome] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const location = useLocation();
   const { dispatch } = useUser();
   const { addNotification } = useNotification();
-  const { filters } = useFilter();
 
   // Buscar lugares do Firestore
   useEffect(() => {
@@ -84,7 +82,6 @@ function AppContent() {
         });
 
         setAllPlaces(placesList);
-        setFilteredPlaces(placesList);
       } catch (error) {
         NotificationService.error(
           'Erro ao buscar lugares',
@@ -132,37 +129,13 @@ function AppContent() {
     }
   }, [location]);
 
-  // Handle filtering
-  useEffect(() => {
-    const filtered = allPlaces.filter(place => {
-      if (filters.category !== 'all' && place.category !== filters.category) {
-        return false;
-      }
-
-      if (filters.ageGroups.length > 0) {
-        const hasMatchingAgeGroup = place.ageGroups.some(age => filters.ageGroups.includes(age));
-        if (!hasMatchingAgeGroup) return false;
-      }
-
-      if (filters.priceRange.length > 0 && !filters.priceRange.includes(place.priceRange)) {
-        return false;
-      }
-
-      for (const [key, value] of Object.entries(filters.amenities)) {
-        if (value && !place.amenities[key as keyof typeof place.amenities]) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    setFilteredPlaces(filtered);
-  }, [filters, allPlaces]);
-
   const handlePlaceAdded = (newPlace: Place) => {
     setAllPlaces(prev => [...prev, newPlace]);
-    setFilteredPlaces(prev => [...prev, newPlace]);
+  };
+
+  const handlePlaceFiltered = () => {
+    // Esta função é chamada pelo MainLayout quando os filtros são aplicados
+    // Não precisamos fazer nada aqui pois a filtragem é gerenciada pelo MainLayout
   };
 
   return (
@@ -181,9 +154,10 @@ function AppContent() {
               <MainLayout
                 showWelcome={showWelcome}
                 setShowWelcome={setShowWelcome}
-                filteredPlaces={filteredPlaces}
                 isLoading={isLoading}
                 onPlaceAdded={handlePlaceAdded}
+                onPlaceFiltered={handlePlaceFiltered}
+                places={allPlaces}
               />
             )}
           </PrivateRoute>

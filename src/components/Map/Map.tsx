@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useLoadScript, Marker, InfoWindow, Circle } from '@react-google-maps/api';
 import { useUser } from '../../App/ContextProviders/UserContext';
 import { db } from '../../firebase/config';
 import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
@@ -8,13 +8,20 @@ import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
 import { auth } from '../../firebase/config';
 import { logError } from '../../utils/logger';
-import type { MapProps, MapState } from './types';
+import { Place } from '../../types/Place';
+import { MapState } from './types';
 import { mapContainerStyle, center, libraries } from './styles';
 import { mapGoogleTypesToCategory, calculateNearbyPlaces, getPlaceDetails } from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 
-const Map = ({ places = [], onPlaceAdded }: MapProps) => {
+interface MapProps {
+  places: Place[];
+  onPlaceAdded: (newPlace: Place) => void;
+  onMapLoad?: (map: google.maps.Map) => void;
+}
+
+const Map = ({ places = [], onPlaceAdded, onMapLoad }: MapProps) => {
   const [state, setState] = useState<MapState>({
     selectedPlace: null,
     newPin: null,
@@ -36,10 +43,11 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     isCustomNameRequired: false,
     customPlaceName: '',
     userLocation: null,
-    nearbyPlaces: [],
+    nearbyPlaces: places,
     isNearbyMode: false,
     hasLocationPermission: null,
     isLocationLoading: false,
+    currentMapBounds: null,
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -54,6 +62,14 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       return;
     }
   }, []);
+
+  useEffect(() => {
+    // Garante que todos os pins estejam visíveis inicialmente
+    setState(prevState => ({
+      ...prevState,
+      nearbyPlaces: places,
+    }));
+  }, [places]);
 
   const proceedWithGeolocation = useCallback(() => {
     setState(prev => ({ ...prev, isLocationLoading: true, isNearbyMode: true }));
@@ -73,11 +89,11 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
         if (userState.isAuthenticated) {
           if (nearby.length === 0) {
             NotificationService.info(
-              'Não encontramos lugares próximos a você. Que tal adicionar um novo lugar para ajudar outras famílias?'
+              'Não encontramos lugares próximos a você em um raio de 10km. Você pode tentar aumentar o zoom do mapa para ver mais lugares ou adicionar um novo lugar para ajudar outras famílias!'
             );
           } else {
             NotificationService.success(
-              `Ótimo! Encontramos ${nearby.length} lugares próximos a você!`
+              `Ótimo! Encontramos ${nearby.length} lugares próximos a você em um raio de 10km!`
             );
           }
         }
@@ -233,9 +249,49 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     libraries: libraries as ('places' | 'drawing' | 'geometry' | 'visualization')[],
   });
 
-  const onMapLoad = useCallback((map: google.maps.Map) => {
-    placesServiceRef.current = new google.maps.places.PlacesService(map);
-  }, []);
+  const handleMapLoad = useCallback(
+    (map: google.maps.Map) => {
+      placesServiceRef.current = new google.maps.places.PlacesService(map);
+
+      // Ajusta o zoom e centralização para mostrar todos os pins
+      if (places.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        places.forEach(place => {
+          bounds.extend({
+            lat: place.location.latitude,
+            lng: place.location.longitude,
+          });
+        });
+        map.fitBounds(bounds);
+      }
+
+      // Adiciona listener para mudanças na região do mapa
+      map.addListener('bounds_changed', () => {
+        const bounds = map.getBounds();
+        if (bounds) {
+          const northEast = bounds.getNorthEast();
+          const southWest = bounds.getSouthWest();
+          if (northEast && southWest) {
+            setState(prev => ({
+              ...prev,
+              currentMapBounds: {
+                north: northEast.lat(),
+                south: southWest.lat(),
+                east: northEast.lng(),
+                west: southWest.lng(),
+              },
+            }));
+          }
+        }
+      });
+
+      // Chama o callback onMapLoad se fornecido
+      if (onMapLoad) {
+        onMapLoad(map);
+      }
+    },
+    [onMapLoad, places]
+  );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {
     if (!state.isAddingPlace || !placesServiceRef.current) return;
@@ -322,7 +378,7 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
       const placeWithId = { ...newPlace, id: docRef.id };
 
       if (onPlaceAdded) {
-        onPlaceAdded(placeWithId as any);
+        onPlaceAdded(placeWithId as Place);
       }
 
       setState(prev => ({
@@ -377,12 +433,26 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
     <div className="h-screen w-full relative">
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
-        zoom={13}
+        zoom={state.userLocation ? 15 : 8}
         center={state.userLocation || center}
         onClick={handleMapClick}
-        onLoad={onMapLoad}
+        onLoad={handleMapLoad}
+        options={{
+          styles: [
+            {
+              featureType: 'poi',
+              elementType: 'labels',
+              stylers: [{ visibility: 'on' }],
+            },
+          ],
+          gestureHandling: 'greedy',
+          fullscreenControl: true,
+          zoomControl: true,
+          streetViewControl: true,
+          mapTypeControl: true,
+        }}
       >
-        {(state.isNearbyMode ? state.nearbyPlaces : places).map(place => (
+        {places.map(place => (
           <Marker
             key={place.id}
             position={{
@@ -390,16 +460,42 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
               lng: place.location.longitude,
             }}
             onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+            icon={{
+              url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40),
+            }}
+            animation={google.maps.Animation.DROP}
+            zIndex={1000}
           />
         ))}
 
         {state.userLocation && (
-          <Marker
-            position={state.userLocation}
-            icon={{
-              url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-            }}
-          />
+          <>
+            <Marker
+              position={state.userLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 6,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                strokeColor: 'white',
+                strokeWeight: 2,
+              }}
+              zIndex={1000}
+            />
+            <Circle
+              center={state.userLocation}
+              radius={50}
+              options={{
+                strokeColor: '#4285F4',
+                strokeOpacity: 0.8,
+                strokeWeight: 1,
+                fillColor: '#4285F4',
+                fillOpacity: 0.15,
+              }}
+            />
+          </>
         )}
 
         {state.newPin && (
@@ -408,7 +504,10 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
             animation={google.maps.Animation.DROP}
             icon={{
               url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+              scaledSize: new google.maps.Size(40, 40),
+              anchor: new google.maps.Point(20, 40),
             }}
+            zIndex={1000}
           />
         )}
 
@@ -434,8 +533,6 @@ const Map = ({ places = [], onPlaceAdded }: MapProps) => {
           <MapControls
             isAddingPlace={state.isAddingPlace}
             isLocationLoading={state.isLocationLoading}
-            isNearbyMode={state.isNearbyMode}
-            nearbyPlaces={state.nearbyPlaces}
             userState={userState}
             onAddPlaceClick={() => setState(prev => ({ ...prev, isAddingPlace: true }))}
             onNearMeClick={() => handleNearMeClick(false, true)}

@@ -66,10 +66,11 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
   }, []);
 
   useEffect(() => {
-    // Garante que todos os pins estejam visíveis inicialmente
+    // Atualiza os lugares visíveis no mapa
     setState(prevState => ({
       ...prevState,
-      nearbyPlaces: places,
+      allPlaces: places,
+      nearbyPlaces: places, // Atualiza também os lugares próximos
     }));
   }, [places]);
 

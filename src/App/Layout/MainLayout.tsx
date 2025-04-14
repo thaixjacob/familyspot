@@ -55,10 +55,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
   const [currentPlaces, setCurrentPlaces] = useState<Place[]>(places);
+  const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
+  const [isNearbyMode, setIsNearbyMode] = useState(false);
   const [showFilteredResults, setShowFilteredResults] = useState(false);
   const { filters } = useFilter();
 
-  // Atualizar currentPlaces quando places ou filters mudarem
+  // Função para receber os lugares próximos do Map
+  const handleNearbyPlaces = (nearby: Place[]) => {
+    setNearbyPlaces(nearby);
+    setIsNearbyMode(true);
+  };
+
   useEffect(() => {
     if (!mapRef) {
       setCurrentPlaces(places);
@@ -73,19 +80,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       return;
     }
 
-    // Primeiro filtra por região visível
-    const placesInView = places.filter(place => {
-      const { latitude, longitude } = place.location;
-      return (
-        latitude >= bounds.getSouthWest().lat() &&
-        latitude <= bounds.getNorthEast().lat() &&
-        longitude >= bounds.getSouthWest().lng() &&
-        longitude <= bounds.getNorthEast().lng()
-      );
-    });
+    // Determinar qual conjunto de lugares usar para filtragem
+    const placesToFilter = isNearbyMode ? nearbyPlaces : places;
 
-    // Depois aplica os filtros selecionados
-    const filteredPlaces = placesInView.filter(place => {
+    // Aplicar filtros aos lugares
+    const filteredPlaces = placesToFilter.filter(place => {
       if (filters.category !== 'all' && place.category !== filters.category) {
         return false;
       }
@@ -111,15 +110,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     setCurrentPlaces(filteredPlaces);
     onPlaceFiltered(filteredPlaces);
 
-    // Mostrar resultados filtrados quando houver filtros ativos OU quando estiver mostrando todos os lugares
     const hasActiveFilters =
       filters.ageGroups.length > 0 ||
       filters.priceRange.length > 0 ||
       Object.values(filters.amenities).some(value => value);
 
-    // Mostrar a lista se houver filtros ativos OU se houver lugares visíveis no mapa
     setShowFilteredResults(hasActiveFilters || filteredPlaces.length > 0);
-  }, [mapRef, places, filters, onPlaceFiltered]);
+  }, [mapRef, places, nearbyPlaces, isNearbyMode, filters, onPlaceFiltered]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -133,7 +130,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           {showFilteredResults && (
             <div className="mt-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-3">
-                Lugares ({currentPlaces.length})
+                {isNearbyMode ? 'Lugares Próximos' : 'Todos os Lugares'} ({currentPlaces.length})
               </h2>
               {isLoading ? (
                 <div className="text-center py-6 text-gray-500">
@@ -157,7 +154,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
         {/* Map area */}
         <div className="flex-1 h-full">
-          <Map places={currentPlaces} onPlaceAdded={onPlaceAdded} onMapLoad={setMapRef} />
+          <Map
+            places={places} // Sempre passar todos os lugares para o mapa
+            onPlaceAdded={onPlaceAdded}
+            onMapLoad={setMapRef}
+            onNearbyPlacesUpdate={handleNearbyPlaces} // Nova prop para receber lugares próximos
+          />
         </div>
       </div>
 

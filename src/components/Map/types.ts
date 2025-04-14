@@ -4,6 +4,7 @@ export interface MapProps {
   places: Place[];
   onPlaceAdded: (newPlace: Place) => void;
   onMapLoad?: (map: google.maps.Map) => void;
+  onNearbyPlacesUpdate?: (nearby: Place[]) => void;
 }
 
 export interface NewPlaceDetails {
@@ -45,6 +46,7 @@ export interface MapState {
   isCustomNameRequired: boolean;
   customPlaceName: string;
   userLocation: { lat: number; lng: number } | null;
+  allPlaces: Place[];
   nearbyPlaces: Place[];
   isNearbyMode: boolean;
   hasLocationPermission: boolean | null;

@@ -155,10 +155,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         {/* Map area */}
         <div className="flex-1 h-full">
           <Map
-            places={places} // Sempre passar todos os lugares para o mapa
+            places={currentPlaces}
             onPlaceAdded={onPlaceAdded}
             onMapLoad={setMapRef}
-            onNearbyPlacesUpdate={handleNearbyPlaces} // Nova prop para receber lugares próximos
+            onNearbyPlacesUpdate={handleNearbyPlaces}
           />
         </div>
       </div>

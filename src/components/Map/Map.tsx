@@ -14,6 +14,7 @@ import { mapContainerStyle, center, libraries } from './styles';
 import { mapGoogleTypesToCategory, calculateNearbyPlaces, getPlaceDetails } from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
+import { CATEGORY_COLORS, CATEGORY_ICONS } from './constants';
 
 interface MapProps {
   places: Place[];
@@ -430,6 +431,23 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     }
   };
 
+  const getMarkerIcon = (category: string) => {
+    const color =
+      CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.default;
+    const iconPath =
+      CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS] || CATEGORY_ICONS.default;
+
+    return {
+      path: iconPath,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+      scale: 1.5,
+      anchor: new google.maps.Point(12, 12),
+    };
+  };
+
   if (loadError || !isLoaded) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -467,18 +485,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         {places.map(place => (
           <Marker
             key={place.id}
-            position={{
-              lat: place.location.latitude,
-              lng: place.location.longitude,
-            }}
+            position={{ lat: place.location.latitude, lng: place.location.longitude }}
             onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
-            icon={{
-              url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-              scaledSize: new google.maps.Size(40, 40),
-              anchor: new google.maps.Point(20, 40),
-            }}
-            animation={google.maps.Animation.DROP}
-            zIndex={1000}
+            icon={getMarkerIcon(place.category)}
           />
         ))}
 

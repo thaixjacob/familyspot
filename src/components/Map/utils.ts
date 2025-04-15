@@ -1,3 +1,5 @@
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { Place } from '../../types/Place';
 import { logError } from '../../utils/logger';
 
@@ -96,5 +98,50 @@ export const getPlaceDetails = async (
   } catch (error) {
     logError(error, 'map_place_details_error');
     return null;
+  }
+};
+
+export const fetchPlacesInBounds = async (
+  mapBounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null
+): Promise<Place[]> => {
+  if (!mapBounds) {
+    return [];
+  }
+
+  try {
+    const placesRef = collection(db, 'places');
+    const placesSnapshot = await getDocs(placesRef);
+
+    const filteredPlaces = placesSnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        } as Place;
+      })
+      .filter(place => {
+        const lat = place.location.latitude;
+        const lng = place.location.longitude;
+
+        return (
+          lat <= mapBounds.north &&
+          lat >= mapBounds.south &&
+          lng <= mapBounds.east &&
+          lng >= mapBounds.west
+        );
+      });
+
+    return filteredPlaces;
+  } catch (error) {
+    logError(error, 'fetch_places_in_bounds_error');
+    return [];
   }
 };

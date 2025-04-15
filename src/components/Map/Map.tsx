@@ -11,7 +11,12 @@ import { logError } from '../../utils/logger';
 import { Place } from '../../types/Place';
 import { MapState } from './types';
 import { mapContainerStyle, center, libraries } from './styles';
-import { mapGoogleTypesToCategory, calculateNearbyPlaces, getPlaceDetails } from './utils';
+import {
+  mapGoogleTypesToCategory,
+  calculateNearbyPlaces,
+  getPlaceDetails,
+  fetchPlacesInBounds,
+} from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from './constants';
@@ -52,6 +57,8 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     isLocationLoading: false,
     currentMapBounds: null,
     needsPlaceUpdate: false,
+    visiblePlaces: [],
+    isLoadingMapData: false,
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -274,6 +281,50 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       mapListenersRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    // Verificar se precisamos atualizar os lugares visíveis
+    if (state.needsPlaceUpdate && state.currentMapBounds) {
+      const loadPlacesInView = async () => {
+        setState(prev => ({ ...prev, isLoadingMapData: true }));
+
+        try {
+          // Buscar lugares dentro dos limites atuais do mapa
+          const placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
+
+          // Atualizar estado com lugares dentro dos limites
+          setState(prev => ({
+            ...prev,
+            visiblePlaces: placesInBounds,
+            needsPlaceUpdate: false,
+            isLoadingMapData: false,
+          }));
+
+          // Atualizar o componente pai, se necessário
+          if (onNearbyPlacesUpdate) {
+            onNearbyPlacesUpdate(placesInBounds);
+          }
+
+          // Notificar o usuário sobre os resultados (opcional)
+          if (userState.isAuthenticated && placesInBounds.length > 0) {
+            NotificationService.info(
+              `Encontramos ${placesInBounds.length} lugares na área visível do mapa.`
+            );
+          }
+        } catch (error) {
+          logError(error, 'load_places_in_view_error');
+          setState(prev => ({ ...prev, isLoadingMapData: false }));
+        }
+      };
+
+      loadPlacesInView();
+    }
+  }, [
+    state.needsPlaceUpdate,
+    state.currentMapBounds,
+    onNearbyPlacesUpdate,
+    userState.isAuthenticated,
+  ]);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
@@ -515,7 +566,15 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           mapTypeControl: true,
         }}
       >
-        {places.map(place => (
+        {state.isLoadingMapData && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 p-3 rounded-lg shadow-md">
+            <div className="flex items-center">
+              <LoadingSpinner size="md" color="text-blue-600" />
+              <span className="ml-2 text-blue-800 font-medium">Carregando lugares...</span>
+            </div>
+          </div>
+        )}
+        {state.visiblePlaces.map(place => (
           <Marker
             key={place.id}
             position={{ lat: place.location.latitude, lng: place.location.longitude }}
@@ -523,7 +582,6 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
             icon={getMarkerIcon(place.category)}
           />
         ))}
-
         {state.userLocation && (
           <>
             <Marker
@@ -666,6 +724,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           </ErrorBoundary>
         )}
       </div>
+      {state.currentMapBounds && !state.isNearbyMode && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10"></div>
+      )}
     </div>
   );
 };

@@ -58,4 +58,6 @@ export interface MapState {
     west: number;
   } | null;
   needsPlaceUpdate: boolean;
+  visiblePlaces: Place[];
+  isLoadingMapData: boolean;
 }

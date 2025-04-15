@@ -57,4 +57,5 @@ export interface MapState {
     east: number;
     west: number;
   } | null;
+  needsPlaceUpdate: boolean;
 }

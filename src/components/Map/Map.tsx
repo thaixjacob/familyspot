@@ -51,6 +51,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     hasLocationPermission: null,
     isLocationLoading: false,
     currentMapBounds: null,
+    needsPlaceUpdate: false,
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -58,6 +59,8 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
   const lastClickTime = useRef<number>(0);
   const COOLDOWN_DURATION = 30000;
   const locationCheckIdRef = useRef<string | null>(null);
+  const boundsChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapListenersRef = useRef<google.maps.MapsEventListener[]>([]);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
@@ -257,6 +260,21 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     checkLocationPermission();
   }, [userState.isAuthenticated, handleNearMeClick]);
 
+  useEffect(() => {
+    // Cleanup function para remover listeners quando o componente desmontar
+    return () => {
+      if (boundsChangeTimeoutRef.current) {
+        clearTimeout(boundsChangeTimeoutRef.current);
+      }
+
+      // Remover todos os listeners de mapa registrados
+      mapListenersRef.current.forEach(listener => {
+        google.maps.event.removeListener(listener);
+      });
+      mapListenersRef.current = [];
+    };
+  }, []);
+
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
     libraries: libraries as ('places' | 'drawing' | 'geometry' | 'visualization')[],
@@ -266,7 +284,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     (map: google.maps.Map) => {
       placesServiceRef.current = new google.maps.places.PlacesService(map);
 
-      // Ajusta o zoom e centralização para mostrar todos os pins
+      // Ajusta o zoom inicial se necessário
       if (places.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         places.forEach(place => {
@@ -278,27 +296,42 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         map.fitBounds(bounds);
       }
 
-      // Adiciona listener para mudanças na região do mapa
-      map.addListener('bounds_changed', () => {
-        const bounds = map.getBounds();
-        if (bounds) {
-          const northEast = bounds.getNorthEast();
-          const southWest = bounds.getSouthWest();
-          if (northEast && southWest) {
-            setState(prev => ({
-              ...prev,
-              currentMapBounds: {
-                north: northEast.lat(),
-                south: southWest.lat(),
-                east: northEast.lng(),
-                west: southWest.lng(),
-              },
-            }));
-          }
+      // Adiciona listener para mudanças de bounds com debounce para evitar muitas chamadas
+      const boundsChangedListener = map.addListener('bounds_changed', () => {
+        // Se a última atualização foi menos de 300ms atrás, ignorar para evitar excesso de updates
+        if (boundsChangeTimeoutRef.current) {
+          clearTimeout(boundsChangeTimeoutRef.current);
         }
+
+        // Usar debounce para atualizar os bounds apenas quando o usuário parar de mover o mapa
+        boundsChangeTimeoutRef.current = setTimeout(() => {
+          const bounds = map.getBounds();
+          if (bounds) {
+            const northEast = bounds.getNorthEast();
+            const southWest = bounds.getSouthWest();
+
+            if (northEast && southWest) {
+              // Atualizar o estado com os novos limites do mapa
+              setState(prev => ({
+                ...prev,
+                currentMapBounds: {
+                  north: northEast.lat(),
+                  south: southWest.lat(),
+                  east: northEast.lng(),
+                  west: southWest.lng(),
+                },
+                // Definir que precisamos carregar novos lugares se o movimento foi significativo
+                needsPlaceUpdate: true,
+              }));
+            }
+          }
+        }, 300); // 300ms debounce
       });
 
-      // Chama o callback onMapLoad se fornecido
+      // Armazenar referência ao listener para limpeza posterior
+      mapListenersRef.current.push(boundsChangedListener);
+
+      // Chama callback onMapLoad se fornecido
       if (onMapLoad) {
         onMapLoad(map);
       }

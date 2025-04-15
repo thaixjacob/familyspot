@@ -66,6 +66,8 @@ function AppContent() {
 
   // Buscar lugares do Firestore
   useEffect(() => {
+    let isMounted = true;
+
     const fetchPlaces = async () => {
       try {
         setIsLoading(true);
@@ -81,18 +83,26 @@ function AppContent() {
           } as Place;
         });
 
-        setAllPlaces(placesList);
+        if (isMounted) {
+          setAllPlaces(placesList);
+          setIsLoading(false);
+        }
       } catch (error) {
-        NotificationService.error(
-          'Erro ao buscar lugares',
-          error instanceof Error ? { message: error.message } : String(error)
-        );
-      } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          NotificationService.error(
+            'Erro ao buscar lugares',
+            error instanceof Error ? { message: error.message } : String(error)
+          );
+          setIsLoading(false);
+        }
       }
     };
 
     fetchPlaces();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Monitorar estado de autenticação

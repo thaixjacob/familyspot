@@ -16,6 +16,8 @@ import {
   calculateNearbyPlaces,
   getPlaceDetails,
   fetchPlacesInBounds,
+  isBoundsChangeSignificant,
+  calculateBoundsCenterDistance,
 } from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
@@ -57,8 +59,11 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     isLocationLoading: false,
     currentMapBounds: null,
     needsPlaceUpdate: false,
-    visiblePlaces: [],
+    visiblePlaces: places,
     isLoadingMapData: false,
+    lastQueriedBounds: null,
+    minPanDistanceThreshold: 500, // 500 metros como limiar mínimo para pan
+    overlapThreshold: 0.3, // 30% de sobreposição como limiar
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -68,6 +73,13 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
   const locationCheckIdRef = useRef<string | null>(null);
   const boundsChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+
+  const lastQueriedBoundsRef = useRef<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
@@ -283,16 +295,31 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
   }, []);
 
   useEffect(() => {
-    // Verificar se precisamos atualizar os lugares visíveis
-    if (state.needsPlaceUpdate && state.currentMapBounds) {
+    // Verificar se currentMapBounds existe e não é null
+    if (state.needsPlaceUpdate && state.currentMapBounds !== null) {
       const loadPlacesInView = async () => {
         setState(prev => ({ ...prev, isLoadingMapData: true }));
 
         try {
-          // Buscar lugares dentro dos limites atuais do mapa
           const placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
 
-          // Atualizar estado com lugares dentro dos limites
+          // Verificar novamente já que o estado pode ter mudado entre o início do efeito e este ponto
+          if (
+            state.currentMapBounds &&
+            typeof state.currentMapBounds.north === 'number' &&
+            typeof state.currentMapBounds.south === 'number' &&
+            typeof state.currentMapBounds.east === 'number' &&
+            typeof state.currentMapBounds.west === 'number'
+          ) {
+            // Agora sabemos que todos os valores são números definidos
+            lastQueriedBoundsRef.current = {
+              north: state.currentMapBounds.north,
+              south: state.currentMapBounds.south,
+              east: state.currentMapBounds.east,
+              west: state.currentMapBounds.west,
+            };
+          }
+
           setState(prev => ({
             ...prev,
             visiblePlaces: placesInBounds,
@@ -347,7 +374,6 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         map.fitBounds(bounds);
       }
 
-      // Adiciona listener para mudanças de bounds com debounce para evitar muitas chamadas
       const boundsChangedListener = map.addListener('bounds_changed', () => {
         // Se a última atualização foi menos de 300ms atrás, ignorar para evitar excesso de updates
         if (boundsChangeTimeoutRef.current) {
@@ -362,21 +388,35 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
             const southWest = bounds.getSouthWest();
 
             if (northEast && southWest) {
-              // Atualizar o estado com os novos limites do mapa
+              const newBounds = {
+                north: northEast.lat(),
+                south: southWest.lat(),
+                east: northEast.lng(),
+                west: southWest.lng(),
+              };
+
+              // Usar o ref para comparação
+              const isSignificant = isBoundsChangeSignificant(
+                lastQueriedBoundsRef.current,
+                newBounds,
+                state.overlapThreshold
+              );
+
+              const distance = calculateBoundsCenterDistance(
+                lastQueriedBoundsRef.current,
+                newBounds
+              );
+              const isDistanceSignificant = distance > state.minPanDistanceThreshold;
+              const shouldUpdate = isSignificant || isDistanceSignificant;
+
               setState(prev => ({
                 ...prev,
-                currentMapBounds: {
-                  north: northEast.lat(),
-                  south: southWest.lat(),
-                  east: northEast.lng(),
-                  west: southWest.lng(),
-                },
-                // Definir que precisamos carregar novos lugares se o movimento foi significativo
-                needsPlaceUpdate: true,
+                currentMapBounds: newBounds,
+                needsPlaceUpdate: shouldUpdate,
               }));
             }
           }
-        }, 300); // 300ms debounce
+        }, 300);
       });
 
       // Armazenar referência ao listener para limpeza posterior
@@ -387,7 +427,13 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         onMapLoad(map);
       }
     },
-    [onMapLoad, places]
+    [
+      onMapLoad,
+      places,
+      state.lastQueriedBounds,
+      state.minPanDistanceThreshold,
+      state.overlapThreshold,
+    ]
   );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {

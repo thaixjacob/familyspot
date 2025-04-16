@@ -60,4 +60,12 @@ export interface MapState {
   needsPlaceUpdate: boolean;
   visiblePlaces: Place[];
   isLoadingMapData: boolean;
+  lastQueriedBounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null;
+  minPanDistanceThreshold: number; // Distância mínima em metros para considerar uma mudança significativa
+  overlapThreshold: number; // Porcentagem de sobreposição para considerar uma mudança significativa
 }

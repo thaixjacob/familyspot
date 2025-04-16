@@ -29,9 +29,27 @@ interface MapProps {
   onPlaceAdded: (newPlace: Place) => void;
   onMapLoad?: (map: google.maps.Map) => void;
   onNearbyPlacesUpdate?: (places: Place[]) => void;
+  activeFilters?: {
+    category?: string;
+    ageGroups?: string[];
+    priceRange?: string[];
+    amenities?: {
+      changingTables?: boolean;
+      playAreas?: boolean;
+      highChairs?: boolean;
+      accessibility?: boolean;
+      kidsMenu?: boolean;
+    };
+  };
 }
 
-const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: MapProps) => {
+const Map = ({
+  places = [],
+  onPlaceAdded,
+  onMapLoad,
+  onNearbyPlacesUpdate,
+  activeFilters = {},
+}: MapProps) => {
   const [state, setState] = useState<MapState>({
     selectedPlace: null,
     newPin: null,
@@ -82,6 +100,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     east: number;
     west: number;
   } | null>(null);
+
+  // Referência para armazenar os filtros atuais
+  const currentFiltersRef = useRef(activeFilters);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
@@ -296,16 +317,65 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     };
   }, []);
 
+  const applyFiltersToPlaces = useCallback(
+    (placesToFilter: Place[]) => {
+      return placesToFilter.filter(place => {
+        if (activeFilters.category && place.category !== activeFilters.category) {
+          return false;
+        }
+
+        if (activeFilters.ageGroups?.length) {
+          const hasMatchingAgeGroup = place.ageGroups.some(age =>
+            activeFilters.ageGroups?.includes(age)
+          );
+          if (!hasMatchingAgeGroup) return false;
+        }
+
+        if (
+          activeFilters.priceRange?.length &&
+          !activeFilters.priceRange.includes(place.priceRange)
+        ) {
+          return false;
+        }
+
+        if (activeFilters.amenities) {
+          for (const [key, value] of Object.entries(activeFilters.amenities)) {
+            if (value && !place.amenities[key as keyof typeof place.amenities]) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      });
+    },
+    [activeFilters]
+  );
+
+  // Adicionar useEffect para monitorar mudanças nos filtros
   useEffect(() => {
-    // Verificar se currentMapBounds existe e não é null
+    // Verificar se os filtros realmente mudaram
+    const filtersChanged =
+      JSON.stringify(activeFilters) !== JSON.stringify(currentFiltersRef.current);
+
+    if (filtersChanged && state.currentMapBounds) {
+      currentFiltersRef.current = activeFilters;
+      setState(prev => ({
+        ...prev,
+        needsPlaceUpdate: true,
+      }));
+    }
+  }, [activeFilters, state.currentMapBounds]);
+
+  useEffect(() => {
     if (state.needsPlaceUpdate && state.currentMapBounds !== null) {
       const loadPlacesInView = async () => {
         setState(prev => ({ ...prev, isLoadingMapData: true }));
 
         try {
           const placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
+          const filteredPlaces = applyFiltersToPlaces(placesInBounds);
 
-          // Verificar novamente já que o estado pode ter mudado entre o início do efeito e este ponto
           if (
             state.currentMapBounds &&
             typeof state.currentMapBounds.north === 'number' &&
@@ -313,7 +383,6 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
             typeof state.currentMapBounds.east === 'number' &&
             typeof state.currentMapBounds.west === 'number'
           ) {
-            // Agora sabemos que todos os valores são números definidos
             lastQueriedBoundsRef.current = {
               north: state.currentMapBounds.north,
               south: state.currentMapBounds.south,
@@ -324,20 +393,18 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
 
           setState(prev => ({
             ...prev,
-            visiblePlaces: placesInBounds,
+            visiblePlaces: filteredPlaces,
             needsPlaceUpdate: false,
             isLoadingMapData: false,
           }));
 
-          // Atualizar o componente pai, se necessário
           if (onNearbyPlacesUpdate) {
-            onNearbyPlacesUpdate(placesInBounds);
+            onNearbyPlacesUpdate(filteredPlaces);
           }
 
-          // Notificar o usuário sobre os resultados (opcional)
-          if (userState.isAuthenticated && placesInBounds.length > 0) {
+          if (userState.isAuthenticated && filteredPlaces.length > 0) {
             NotificationService.info(
-              `Encontramos ${placesInBounds.length} lugares na área visível do mapa.`
+              `Encontramos ${filteredPlaces.length} lugares na área visível do mapa.`
             );
           }
         } catch (error) {
@@ -353,6 +420,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     state.currentMapBounds,
     onNearbyPlacesUpdate,
     userState.isAuthenticated,
+    applyFiltersToPlaces,
   ]);
 
   const { isLoaded, loadError } = useLoadScript({

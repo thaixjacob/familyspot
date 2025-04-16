@@ -68,4 +68,5 @@ export interface MapState {
   } | null;
   minPanDistanceThreshold: number; // Distância mínima em metros para considerar uma mudança significativa
   overlapThreshold: number; // Porcentagem de sobreposição para considerar uma mudança significativa
+  isPanning: boolean;
 }

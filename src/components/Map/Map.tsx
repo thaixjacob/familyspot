@@ -22,6 +22,7 @@ import {
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from './constants';
+import MapStatusIndicator from './MapStatusIndicator';
 
 interface MapProps {
   places: Place[];
@@ -62,8 +63,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     visiblePlaces: places,
     isLoadingMapData: false,
     lastQueriedBounds: null,
-    minPanDistanceThreshold: 500, // 500 metros como limiar mínimo para pan
-    overlapThreshold: 0.3, // 30% de sobreposição como limiar
+    minPanDistanceThreshold: 500,
+    overlapThreshold: 0.3,
+    isPanning: false,
   });
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
@@ -426,6 +428,20 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       if (onMapLoad) {
         onMapLoad(map);
       }
+
+      const dragStartListener = map.addListener('dragstart', () => {
+        setState(prev => ({ ...prev, isPanning: true }));
+      });
+
+      const dragEndListener = map.addListener('dragend', () => {
+        // Um pequeno atraso para dar feedback visual suficiente ao usuário
+        setTimeout(() => {
+          setState(prev => ({ ...prev, isPanning: false }));
+        }, 300);
+      });
+
+      mapListenersRef.current.push(dragStartListener);
+      mapListenersRef.current.push(dragEndListener);
     },
     [
       onMapLoad,
@@ -561,11 +577,14 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     }
   };
 
-  const getMarkerIcon = (category: string) => {
+  const getMarkerIcon = (category: string, animate = false) => {
     const color =
       CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.default;
     const iconPath =
       CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS] || CATEGORY_ICONS.default;
+
+    // Example of using the animate parameter
+    const scale = animate ? 1.8 : 1.5;
 
     return {
       path: iconPath,
@@ -573,7 +592,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
-      scale: 1.5,
+      scale,
       anchor: new google.maps.Point(12, 12),
     };
   };
@@ -612,20 +631,21 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           mapTypeControl: true,
         }}
       >
-        {state.isLoadingMapData && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 p-3 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <LoadingSpinner size="md" color="text-blue-600" />
-              <span className="ml-2 text-blue-800 font-medium">Carregando lugares...</span>
-            </div>
-          </div>
-        )}
+        <MapStatusIndicator
+          isLoading={state.isLoadingMapData}
+          placesCount={state.visiblePlaces.length}
+          isPanning={state.isPanning}
+          showNeedsSearch={
+            !state.isNearbyMode && state.visiblePlaces.length === 0 && !state.isLoadingMapData
+          }
+        />
         {state.visiblePlaces.map(place => (
           <Marker
             key={place.id}
             position={{ lat: place.location.latitude, lng: place.location.longitude }}
             onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
             icon={getMarkerIcon(place.category)}
+            animation={google.maps.Animation.DROP} // Animação de queda para os marcadores
           />
         ))}
         {state.userLocation && (
@@ -685,6 +705,52 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           </InfoWindow>
         )}
       </GoogleMap>
+
+      {/* Indicador para encorajar a exploração do mapa */}
+      {!state.isLoadingMapData && state.visiblePlaces.length < 3 && state.currentMapBounds && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10 bg-white bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+          <div className="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-gray-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+              />
+            </svg>
+            <span className="text-gray-700 text-sm">Mova o mapa para explorar mais lugares</span>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de área vazia */}
+      {!state.isLoadingMapData && state.visiblePlaces.length === 0 && !state.isNearbyMode && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-yellow-50 bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+          <div className="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-yellow-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <span className="text-yellow-700 text-sm">Nenhum lugar encontrado nesta área</span>
+          </div>
+        </div>
+      )}
 
       <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
         {!state.isAddingPlace ? (

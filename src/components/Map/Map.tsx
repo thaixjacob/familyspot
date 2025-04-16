@@ -443,13 +443,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       mapListenersRef.current.push(dragStartListener);
       mapListenersRef.current.push(dragEndListener);
     },
-    [
-      onMapLoad,
-      places,
-      state.lastQueriedBounds,
-      state.minPanDistanceThreshold,
-      state.overlapThreshold,
-    ]
+    [onMapLoad, places, state.minPanDistanceThreshold, state.overlapThreshold]
   );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {

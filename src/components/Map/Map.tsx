@@ -18,6 +18,11 @@ import {
   fetchPlacesInBounds,
   isBoundsChangeSignificant,
   calculateBoundsCenterDistance,
+  PlacesCache,
+  createCache,
+  updateCache,
+  getPlacesFromCache,
+  clearExpiredCache,
 } from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
@@ -85,6 +90,7 @@ const Map = ({
     overlapThreshold: 0.3,
     isPanning: false,
   });
+  const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const { state: userState } = useUser();
@@ -93,6 +99,8 @@ const Map = ({
   const locationCheckIdRef = useRef<string | null>(null);
   const boundsChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mapListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  const placesCache = useRef<PlacesCache>(createCache());
+  const cacheEnabled = useRef<boolean>(true);
 
   const lastQueriedBoundsRef = useRef<{
     north: number;
@@ -120,7 +128,43 @@ const Map = ({
     }));
   }, [places]);
 
+  useEffect(() => {
+    // Tentar carregar cache salvo
+    const savedCache = loadCacheFromStorage();
+    if (savedCache) {
+      placesCache.current = savedCache;
+      // Limpar entradas expiradas imediatamente
+      placesCache.current = clearExpiredCache(placesCache.current);
+    }
+  }, []);
+
+  // Em outro useEffect para salvar periodicamente:
+  useEffect(() => {
+    // Capturar o valor atual do ref no início do efeito
+    const isCacheEnabled = cacheEnabled.current;
+
+    const cacheSaveInterval = setInterval(() => {
+      // Usar a variável capturada em vez do ref diretamente
+      if (isCacheEnabled && placesCache.current.entries.length > 0) {
+        saveCache(placesCache.current);
+      }
+    }, 30000); // Salvar a cada 30 segundos se houver mudanças
+
+    return () => {
+      clearInterval(cacheSaveInterval);
+      // Usar a variável capturada aqui também
+      if (isCacheEnabled && placesCache.current.entries.length > 0) {
+        saveCache(placesCache.current);
+      }
+    };
+  }, []);
+
   const proceedWithGeolocation = useCallback(() => {
+    if (!isGoogleMapsReady) {
+      NotificationService.error('Google Maps ainda está carregando. Tente novamente em instantes.');
+      return;
+    }
+
     setState(prev => ({ ...prev, isLocationLoading: true, isNearbyMode: true }));
 
     navigator.geolocation.getCurrentPosition(
@@ -171,7 +215,7 @@ const Map = ({
         maximumAge: 0,
       }
     );
-  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate]);
+  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate, isGoogleMapsReady]);
 
   const checkBrowserPermission = useCallback(async () => {
     try {
@@ -195,6 +239,13 @@ const Map = ({
 
   const handleNearMeClick = useCallback(
     async (hasPermission = false, isManualClick = false) => {
+      if (!isGoogleMapsReady) {
+        NotificationService.error(
+          'Google Maps ainda está carregando. Tente novamente em instantes.'
+        );
+        return;
+      }
+
       if (isManualClick) {
         const now = Date.now();
         const timeSinceLastClick = now - lastClickTime.current;
@@ -253,10 +304,12 @@ const Map = ({
       state.hasLocationPermission,
       checkBrowserPermission,
       userState.isAuthenticated,
+      isGoogleMapsReady,
     ]
   );
 
   useEffect(() => {
+    if (!isGoogleMapsReady) return;
     const checkLocationPermission = async () => {
       if (!userState.isAuthenticated || locationCheckIdRef.current) return;
 
@@ -300,7 +353,7 @@ const Map = ({
     };
 
     checkLocationPermission();
-  }, [userState.isAuthenticated, handleNearMeClick]);
+  }, [userState.isAuthenticated, handleNearMeClick, isGoogleMapsReady]);
 
   useEffect(() => {
     // Cleanup function para remover listeners quando o componente desmontar
@@ -373,22 +426,47 @@ const Map = ({
         setState(prev => ({ ...prev, isLoadingMapData: true }));
 
         try {
-          const placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
+          // Verificar se existe no cache primeiro
+          let placesInBounds: Place[] = [];
+          let fromCache = false;
+
+          if (cacheEnabled.current) {
+            // Limpar entradas expiradas antes de verificar o cache
+            placesCache.current = clearExpiredCache(placesCache.current);
+
+            // Adicionar uma verificação explícita de nulidade aqui
+            if (state.currentMapBounds) {
+              // Tentar buscar do cache
+              const cachedPlaces = getPlacesFromCache(placesCache.current, state.currentMapBounds);
+
+              if (cachedPlaces) {
+                placesInBounds = cachedPlaces;
+                fromCache = true;
+              }
+            }
+          }
+
+          // Se não encontrou no cache, buscar do Firestore
+          if (!fromCache && state.currentMapBounds) {
+            // Adicionamos state.currentMapBounds aqui
+            placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
+
+            // Atualizar o cache com os novos dados
+            if (cacheEnabled.current) {
+              placesCache.current = updateCache(
+                placesCache.current,
+                placesInBounds,
+                state.currentMapBounds
+              );
+            }
+          }
+
+          // Aplicar filtros
           const filteredPlaces = applyFiltersToPlaces(placesInBounds);
 
-          if (
-            state.currentMapBounds &&
-            typeof state.currentMapBounds.north === 'number' &&
-            typeof state.currentMapBounds.south === 'number' &&
-            typeof state.currentMapBounds.east === 'number' &&
-            typeof state.currentMapBounds.west === 'number'
-          ) {
-            lastQueriedBoundsRef.current = {
-              north: state.currentMapBounds.north,
-              south: state.currentMapBounds.south,
-              east: state.currentMapBounds.east,
-              west: state.currentMapBounds.west,
-            };
+          // Atualizar lastQueriedBoundsRef
+          if (state.currentMapBounds) {
+            lastQueriedBoundsRef.current = { ...state.currentMapBounds };
           }
 
           setState(prev => ({
@@ -398,14 +476,9 @@ const Map = ({
             isLoadingMapData: false,
           }));
 
+          // Notificar o pai, se necessário
           if (onNearbyPlacesUpdate) {
             onNearbyPlacesUpdate(filteredPlaces);
-          }
-
-          if (userState.isAuthenticated && filteredPlaces.length > 0) {
-            NotificationService.info(
-              `Encontramos ${filteredPlaces.length} lugares na área visível do mapa.`
-            );
           }
         } catch (error) {
           logError(error, 'load_places_in_view_error');
@@ -423,6 +496,19 @@ const Map = ({
     applyFiltersToPlaces,
   ]);
 
+  // Adicione este useEffect para limpar o cache periodicamente
+  useEffect(() => {
+    const cacheCleanupInterval = setInterval(() => {
+      if (cacheEnabled.current) {
+        placesCache.current = clearExpiredCache(placesCache.current);
+      }
+    }, 60000); // Verificar a cada minuto
+
+    return () => {
+      clearInterval(cacheCleanupInterval);
+    };
+  }, []);
+
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
     libraries: libraries as ('places' | 'drawing' | 'geometry' | 'visualization')[],
@@ -431,6 +517,8 @@ const Map = ({
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       placesServiceRef.current = new google.maps.places.PlacesService(map);
+
+      setIsGoogleMapsReady(true);
 
       // Ajusta o zoom inicial se necessário
       if (places.length > 0) {
@@ -563,6 +651,13 @@ const Map = ({
     }
   };
 
+  const invalidateCache = useCallback(() => {
+    placesCache.current = createCache(
+      placesCache.current.maxEntries,
+      placesCache.current.expirationTime
+    );
+  }, []);
+
   const saveNewPlace = async () => {
     if (
       !state.newPin ||
@@ -602,6 +697,9 @@ const Map = ({
         onPlaceAdded(placeWithId as Place);
       }
 
+      // Invalidar o cache após adicionar um novo lugar
+      invalidateCache();
+
       setState(prev => ({
         ...prev,
         newPin: null,
@@ -637,6 +735,35 @@ const Map = ({
       );
       NotificationService.error('Erro ao adicionar local. Tente novamente.');
     }
+  };
+
+  const saveCache = (cache: PlacesCache) => {
+    try {
+      localStorage.setItem('familyspot_places_cache', JSON.stringify(cache));
+    } catch (error) {
+      logError(error, 'cache_save_warning');
+
+      // Modo de desenvolvimento podemos mostrar mais detalhes
+      if (process.env.NODE_ENV === 'development') {
+        logError(error, 'cache_save_warning');
+      }
+    }
+  };
+
+  const loadCacheFromStorage = (): PlacesCache | null => {
+    try {
+      const stored = localStorage.getItem('familyspot_places_cache');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      logError(error, 'cache_load_warning');
+
+      if (process.env.NODE_ENV === 'development') {
+        logError(error, 'cache_load_warning');
+      }
+    }
+    return null;
   };
 
   const getMarkerIcon = (category: string, animate = false) => {

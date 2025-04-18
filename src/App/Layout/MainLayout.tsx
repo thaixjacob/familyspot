@@ -159,6 +159,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             onPlaceAdded={onPlaceAdded}
             onMapLoad={setMapRef}
             onNearbyPlacesUpdate={handleNearbyPlaces}
+            activeFilters={{
+              category: filters.category !== 'all' ? filters.category : undefined,
+              ageGroups: filters.ageGroups,
+              priceRange: filters.priceRange,
+              amenities: filters.amenities,
+            }}
           />
         </div>
       </div>

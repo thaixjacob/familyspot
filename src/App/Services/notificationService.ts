@@ -25,10 +25,16 @@ class NotificationService {
     | ((type: string, message: string, details?: string | Record<string, unknown>) => void)
     | null = null;
 
+  private static idCounter = 0;
+
   static initialize(
     callback: (type: string, message: string, details?: string | Record<string, unknown>) => void
   ): void {
     this.notifyCallback = callback;
+  }
+
+  private static generateUniqueId(): number {
+    return Date.now() * 1000 + (this.idCounter++ % 1000);
   }
 
   static debug(message: string, details?: string | Record<string, unknown>): void {

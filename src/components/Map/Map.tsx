@@ -11,19 +11,50 @@ import { logError } from '../../utils/logger';
 import { Place } from '../../types/Place';
 import { MapState } from './types';
 import { mapContainerStyle, center, libraries } from './styles';
-import { mapGoogleTypesToCategory, calculateNearbyPlaces, getPlaceDetails } from './utils';
+import {
+  mapGoogleTypesToCategory,
+  calculateNearbyPlaces,
+  getPlaceDetails,
+  fetchPlacesInBounds,
+  isBoundsChangeSignificant,
+  calculateBoundsCenterDistance,
+  PlacesCache,
+  createCache,
+  updateCache,
+  getPlacesFromCache,
+  clearExpiredCache,
+} from './utils';
 import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from './constants';
+import MapStatusIndicator from './MapStatusIndicator';
 
 interface MapProps {
   places: Place[];
   onPlaceAdded: (newPlace: Place) => void;
   onMapLoad?: (map: google.maps.Map) => void;
   onNearbyPlacesUpdate?: (places: Place[]) => void;
+  activeFilters?: {
+    category?: string;
+    ageGroups?: string[];
+    priceRange?: string[];
+    amenities?: {
+      changingTables?: boolean;
+      playAreas?: boolean;
+      highChairs?: boolean;
+      accessibility?: boolean;
+      kidsMenu?: boolean;
+    };
+  };
 }
 
-const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: MapProps) => {
+const Map = ({
+  places = [],
+  onPlaceAdded,
+  onMapLoad,
+  onNearbyPlacesUpdate,
+  activeFilters = {},
+}: MapProps) => {
   const [state, setState] = useState<MapState>({
     selectedPlace: null,
     newPin: null,
@@ -51,13 +82,35 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     hasLocationPermission: null,
     isLocationLoading: false,
     currentMapBounds: null,
+    needsPlaceUpdate: false,
+    visiblePlaces: places,
+    isLoadingMapData: false,
+    lastQueriedBounds: null,
+    minPanDistanceThreshold: 500,
+    overlapThreshold: 0.3,
+    isPanning: false,
   });
+  const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const { state: userState } = useUser();
   const lastClickTime = useRef<number>(0);
   const COOLDOWN_DURATION = 30000;
   const locationCheckIdRef = useRef<string | null>(null);
+  const boundsChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  const placesCache = useRef<PlacesCache>(createCache());
+  const cacheEnabled = useRef<boolean>(true);
+
+  const lastQueriedBoundsRef = useRef<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
+
+  // Referência para armazenar os filtros atuais
+  const currentFiltersRef = useRef(activeFilters);
 
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
@@ -75,7 +128,43 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     }));
   }, [places]);
 
+  useEffect(() => {
+    // Tentar carregar cache salvo
+    const savedCache = loadCacheFromStorage();
+    if (savedCache) {
+      placesCache.current = savedCache;
+      // Limpar entradas expiradas imediatamente
+      placesCache.current = clearExpiredCache(placesCache.current);
+    }
+  }, []);
+
+  // Em outro useEffect para salvar periodicamente:
+  useEffect(() => {
+    // Capturar o valor atual do ref no início do efeito
+    const isCacheEnabled = cacheEnabled.current;
+
+    const cacheSaveInterval = setInterval(() => {
+      // Usar a variável capturada em vez do ref diretamente
+      if (isCacheEnabled && placesCache.current.entries.length > 0) {
+        saveCache(placesCache.current);
+      }
+    }, 30000); // Salvar a cada 30 segundos se houver mudanças
+
+    return () => {
+      clearInterval(cacheSaveInterval);
+      // Usar a variável capturada aqui também
+      if (isCacheEnabled && placesCache.current.entries.length > 0) {
+        saveCache(placesCache.current);
+      }
+    };
+  }, []);
+
   const proceedWithGeolocation = useCallback(() => {
+    if (!isGoogleMapsReady) {
+      NotificationService.error('Google Maps ainda está carregando. Tente novamente em instantes.');
+      return;
+    }
+
     setState(prev => ({ ...prev, isLocationLoading: true, isNearbyMode: true }));
 
     navigator.geolocation.getCurrentPosition(
@@ -126,7 +215,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         maximumAge: 0,
       }
     );
-  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate]);
+  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate, isGoogleMapsReady]);
 
   const checkBrowserPermission = useCallback(async () => {
     try {
@@ -150,6 +239,13 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
 
   const handleNearMeClick = useCallback(
     async (hasPermission = false, isManualClick = false) => {
+      if (!isGoogleMapsReady) {
+        NotificationService.error(
+          'Google Maps ainda está carregando. Tente novamente em instantes.'
+        );
+        return;
+      }
+
       if (isManualClick) {
         const now = Date.now();
         const timeSinceLastClick = now - lastClickTime.current;
@@ -208,10 +304,12 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       state.hasLocationPermission,
       checkBrowserPermission,
       userState.isAuthenticated,
+      isGoogleMapsReady,
     ]
   );
 
   useEffect(() => {
+    if (!isGoogleMapsReady) return;
     const checkLocationPermission = async () => {
       if (!userState.isAuthenticated || locationCheckIdRef.current) return;
 
@@ -255,7 +353,161 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     };
 
     checkLocationPermission();
-  }, [userState.isAuthenticated, handleNearMeClick]);
+  }, [userState.isAuthenticated, handleNearMeClick, isGoogleMapsReady]);
+
+  useEffect(() => {
+    // Cleanup function para remover listeners quando o componente desmontar
+    return () => {
+      if (boundsChangeTimeoutRef.current) {
+        clearTimeout(boundsChangeTimeoutRef.current);
+      }
+
+      // Remover todos os listeners de mapa registrados
+      mapListenersRef.current.forEach(listener => {
+        google.maps.event.removeListener(listener);
+      });
+      mapListenersRef.current = [];
+    };
+  }, []);
+
+  const applyFiltersToPlaces = useCallback(
+    (placesToFilter: Place[]) => {
+      return placesToFilter.filter(place => {
+        if (activeFilters.category && place.category !== activeFilters.category) {
+          return false;
+        }
+
+        if (activeFilters.ageGroups?.length) {
+          const hasMatchingAgeGroup = place.ageGroups.some(age =>
+            activeFilters.ageGroups?.includes(age)
+          );
+          if (!hasMatchingAgeGroup) return false;
+        }
+
+        if (
+          activeFilters.priceRange?.length &&
+          !activeFilters.priceRange.includes(place.priceRange)
+        ) {
+          return false;
+        }
+
+        if (activeFilters.amenities) {
+          for (const [key, value] of Object.entries(activeFilters.amenities)) {
+            if (value && !place.amenities[key as keyof typeof place.amenities]) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      });
+    },
+    [activeFilters]
+  );
+
+  // Adicionar useEffect para monitorar mudanças nos filtros
+  useEffect(() => {
+    // Verificar se os filtros realmente mudaram
+    const filtersChanged =
+      JSON.stringify(activeFilters) !== JSON.stringify(currentFiltersRef.current);
+
+    if (filtersChanged && state.currentMapBounds) {
+      currentFiltersRef.current = activeFilters;
+      setState(prev => ({
+        ...prev,
+        needsPlaceUpdate: true,
+      }));
+    }
+  }, [activeFilters, state.currentMapBounds]);
+
+  useEffect(() => {
+    if (state.needsPlaceUpdate && state.currentMapBounds !== null) {
+      const loadPlacesInView = async () => {
+        setState(prev => ({ ...prev, isLoadingMapData: true }));
+
+        try {
+          // Verificar se existe no cache primeiro
+          let placesInBounds: Place[] = [];
+          let fromCache = false;
+
+          if (cacheEnabled.current) {
+            // Limpar entradas expiradas antes de verificar o cache
+            placesCache.current = clearExpiredCache(placesCache.current);
+
+            // Adicionar uma verificação explícita de nulidade aqui
+            if (state.currentMapBounds) {
+              // Tentar buscar do cache
+              const cachedPlaces = getPlacesFromCache(placesCache.current, state.currentMapBounds);
+
+              if (cachedPlaces) {
+                placesInBounds = cachedPlaces;
+                fromCache = true;
+              }
+            }
+          }
+
+          // Se não encontrou no cache, buscar do Firestore
+          if (!fromCache && state.currentMapBounds) {
+            // Adicionamos state.currentMapBounds aqui
+            placesInBounds = await fetchPlacesInBounds(state.currentMapBounds);
+
+            // Atualizar o cache com os novos dados
+            if (cacheEnabled.current) {
+              placesCache.current = updateCache(
+                placesCache.current,
+                placesInBounds,
+                state.currentMapBounds
+              );
+            }
+          }
+
+          // Aplicar filtros
+          const filteredPlaces = applyFiltersToPlaces(placesInBounds);
+
+          // Atualizar lastQueriedBoundsRef
+          if (state.currentMapBounds) {
+            lastQueriedBoundsRef.current = { ...state.currentMapBounds };
+          }
+
+          setState(prev => ({
+            ...prev,
+            visiblePlaces: filteredPlaces,
+            needsPlaceUpdate: false,
+            isLoadingMapData: false,
+          }));
+
+          // Notificar o pai, se necessário
+          if (onNearbyPlacesUpdate) {
+            onNearbyPlacesUpdate(filteredPlaces);
+          }
+        } catch (error) {
+          logError(error, 'load_places_in_view_error');
+          setState(prev => ({ ...prev, isLoadingMapData: false }));
+        }
+      };
+
+      loadPlacesInView();
+    }
+  }, [
+    state.needsPlaceUpdate,
+    state.currentMapBounds,
+    onNearbyPlacesUpdate,
+    userState.isAuthenticated,
+    applyFiltersToPlaces,
+  ]);
+
+  // Adicione este useEffect para limpar o cache periodicamente
+  useEffect(() => {
+    const cacheCleanupInterval = setInterval(() => {
+      if (cacheEnabled.current) {
+        placesCache.current = clearExpiredCache(placesCache.current);
+      }
+    }, 60000); // Verificar a cada minuto
+
+    return () => {
+      clearInterval(cacheCleanupInterval);
+    };
+  }, []);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
@@ -266,7 +518,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     (map: google.maps.Map) => {
       placesServiceRef.current = new google.maps.places.PlacesService(map);
 
-      // Ajusta o zoom e centralização para mostrar todos os pins
+      setIsGoogleMapsReady(true);
+
+      // Ajusta o zoom inicial se necessário
       if (places.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         places.forEach(place => {
@@ -278,32 +532,74 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         map.fitBounds(bounds);
       }
 
-      // Adiciona listener para mudanças na região do mapa
-      map.addListener('bounds_changed', () => {
-        const bounds = map.getBounds();
-        if (bounds) {
-          const northEast = bounds.getNorthEast();
-          const southWest = bounds.getSouthWest();
-          if (northEast && southWest) {
-            setState(prev => ({
-              ...prev,
-              currentMapBounds: {
+      const boundsChangedListener = map.addListener('bounds_changed', () => {
+        // Se a última atualização foi menos de 300ms atrás, ignorar para evitar excesso de updates
+        if (boundsChangeTimeoutRef.current) {
+          clearTimeout(boundsChangeTimeoutRef.current);
+        }
+
+        // Usar debounce para atualizar os bounds apenas quando o usuário parar de mover o mapa
+        boundsChangeTimeoutRef.current = setTimeout(() => {
+          const bounds = map.getBounds();
+          if (bounds) {
+            const northEast = bounds.getNorthEast();
+            const southWest = bounds.getSouthWest();
+
+            if (northEast && southWest) {
+              const newBounds = {
                 north: northEast.lat(),
                 south: southWest.lat(),
                 east: northEast.lng(),
                 west: southWest.lng(),
-              },
-            }));
+              };
+
+              // Usar o ref para comparação
+              const isSignificant = isBoundsChangeSignificant(
+                lastQueriedBoundsRef.current,
+                newBounds,
+                state.overlapThreshold
+              );
+
+              const distance = calculateBoundsCenterDistance(
+                lastQueriedBoundsRef.current,
+                newBounds
+              );
+              const isDistanceSignificant = distance > state.minPanDistanceThreshold;
+              const shouldUpdate = isSignificant || isDistanceSignificant;
+
+              setState(prev => ({
+                ...prev,
+                currentMapBounds: newBounds,
+                needsPlaceUpdate: shouldUpdate,
+              }));
+            }
           }
-        }
+        }, 300);
       });
 
-      // Chama o callback onMapLoad se fornecido
+      // Armazenar referência ao listener para limpeza posterior
+      mapListenersRef.current.push(boundsChangedListener);
+
+      // Chama callback onMapLoad se fornecido
       if (onMapLoad) {
         onMapLoad(map);
       }
+
+      const dragStartListener = map.addListener('dragstart', () => {
+        setState(prev => ({ ...prev, isPanning: true }));
+      });
+
+      const dragEndListener = map.addListener('dragend', () => {
+        // Um pequeno atraso para dar feedback visual suficiente ao usuário
+        setTimeout(() => {
+          setState(prev => ({ ...prev, isPanning: false }));
+        }, 300);
+      });
+
+      mapListenersRef.current.push(dragStartListener);
+      mapListenersRef.current.push(dragEndListener);
     },
-    [onMapLoad, places]
+    [onMapLoad, places, state.minPanDistanceThreshold, state.overlapThreshold]
   );
 
   const handleMapClick = async (event: google.maps.MapMouseEvent) => {
@@ -355,6 +651,13 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     }
   };
 
+  const invalidateCache = useCallback(() => {
+    placesCache.current = createCache(
+      placesCache.current.maxEntries,
+      placesCache.current.expirationTime
+    );
+  }, []);
+
   const saveNewPlace = async () => {
     if (
       !state.newPin ||
@@ -394,6 +697,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
         onPlaceAdded(placeWithId as Place);
       }
 
+      // Invalidar o cache após adicionar um novo lugar
+      invalidateCache();
+
       setState(prev => ({
         ...prev,
         newPin: null,
@@ -431,11 +737,43 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
     }
   };
 
-  const getMarkerIcon = (category: string) => {
+  const saveCache = (cache: PlacesCache) => {
+    try {
+      localStorage.setItem('familyspot_places_cache', JSON.stringify(cache));
+    } catch (error) {
+      logError(error, 'cache_save_warning');
+
+      // Modo de desenvolvimento podemos mostrar mais detalhes
+      if (process.env.NODE_ENV === 'development') {
+        logError(error, 'cache_save_warning');
+      }
+    }
+  };
+
+  const loadCacheFromStorage = (): PlacesCache | null => {
+    try {
+      const stored = localStorage.getItem('familyspot_places_cache');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      logError(error, 'cache_load_warning');
+
+      if (process.env.NODE_ENV === 'development') {
+        logError(error, 'cache_load_warning');
+      }
+    }
+    return null;
+  };
+
+  const getMarkerIcon = (category: string, animate = false) => {
     const color =
       CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.default;
     const iconPath =
       CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS] || CATEGORY_ICONS.default;
+
+    // Example of using the animate parameter
+    const scale = animate ? 1.8 : 1.5;
 
     return {
       path: iconPath,
@@ -443,7 +781,7 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
-      scale: 1.5,
+      scale,
       anchor: new google.maps.Point(12, 12),
     };
   };
@@ -482,15 +820,23 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           mapTypeControl: true,
         }}
       >
-        {places.map(place => (
+        <MapStatusIndicator
+          isLoading={state.isLoadingMapData}
+          placesCount={state.visiblePlaces.length}
+          isPanning={state.isPanning}
+          showNeedsSearch={
+            !state.isNearbyMode && state.visiblePlaces.length === 0 && !state.isLoadingMapData
+          }
+        />
+        {state.visiblePlaces.map(place => (
           <Marker
             key={place.id}
             position={{ lat: place.location.latitude, lng: place.location.longitude }}
             onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
             icon={getMarkerIcon(place.category)}
+            animation={google.maps.Animation.DROP} // Animação de queda para os marcadores
           />
         ))}
-
         {state.userLocation && (
           <>
             <Marker
@@ -548,6 +894,52 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           </InfoWindow>
         )}
       </GoogleMap>
+
+      {/* Indicador para encorajar a exploração do mapa */}
+      {!state.isLoadingMapData && state.visiblePlaces.length < 3 && state.currentMapBounds && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10 bg-white bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+          <div className="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-gray-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+              />
+            </svg>
+            <span className="text-gray-700 text-sm">Mova o mapa para explorar mais lugares</span>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de área vazia */}
+      {!state.isLoadingMapData && state.visiblePlaces.length === 0 && !state.isNearbyMode && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-yellow-50 bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+          <div className="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-yellow-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <span className="text-yellow-700 text-sm">Nenhum lugar encontrado nesta área</span>
+          </div>
+        </div>
+      )}
 
       <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
         {!state.isAddingPlace ? (
@@ -633,6 +1025,9 @@ const Map = ({ places = [], onPlaceAdded, onMapLoad, onNearbyPlacesUpdate }: Map
           </ErrorBoundary>
         )}
       </div>
+      {state.currentMapBounds && !state.isNearbyMode && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10"></div>
+      )}
     </div>
   );
 };

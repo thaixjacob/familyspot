@@ -112,6 +112,9 @@ const Map = ({
   // Referência para armazenar os filtros atuais
   const currentFiltersRef = useRef(activeFilters);
 
+  const prevPlacesRef = useRef(places);
+  const prevVisiblePlacesRef = useRef(state.visiblePlaces);
+
   useEffect(() => {
     if (!process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
       NotificationService.error('Google Maps API key is missing!');
@@ -120,12 +123,15 @@ const Map = ({
   }, []);
 
   useEffect(() => {
-    // Atualiza os lugares visíveis no mapa
-    setState(prevState => ({
-      ...prevState,
-      allPlaces: places,
-      nearbyPlaces: places, // Atualiza também os lugares próximos
-    }));
+    // Atualiza os lugares visíveis no mapa apenas se houver mudança real
+    if (JSON.stringify(places) !== JSON.stringify(prevPlacesRef.current)) {
+      setState(prevState => ({
+        ...prevState,
+        allPlaces: places,
+        nearbyPlaces: places,
+      }));
+      prevPlacesRef.current = places;
+    }
   }, [places]);
 
   useEffect(() => {
@@ -423,6 +429,9 @@ const Map = ({
   useEffect(() => {
     if (state.needsPlaceUpdate && state.currentMapBounds !== null) {
       const loadPlacesInView = async () => {
+        // Evita múltiplas chamadas simultâneas
+        if (state.isLoadingMapData) return;
+
         setState(prev => ({ ...prev, isLoadingMapData: true }));
 
         try {
@@ -469,12 +478,22 @@ const Map = ({
             lastQueriedBoundsRef.current = { ...state.currentMapBounds };
           }
 
-          setState(prev => ({
-            ...prev,
-            visiblePlaces: filteredPlaces,
-            needsPlaceUpdate: false,
-            isLoadingMapData: false,
-          }));
+          // Atualiza o estado apenas se houver mudanças reais
+          if (JSON.stringify(filteredPlaces) !== JSON.stringify(prevVisiblePlacesRef.current)) {
+            setState(prev => ({
+              ...prev,
+              visiblePlaces: filteredPlaces,
+              needsPlaceUpdate: false,
+              isLoadingMapData: false,
+            }));
+            prevVisiblePlacesRef.current = filteredPlaces;
+          } else {
+            setState(prev => ({
+              ...prev,
+              needsPlaceUpdate: false,
+              isLoadingMapData: false,
+            }));
+          }
 
           // Notificar o pai, se necessário
           if (onNearbyPlacesUpdate) {
@@ -494,6 +513,7 @@ const Map = ({
     onNearbyPlacesUpdate,
     userState.isAuthenticated,
     applyFiltersToPlaces,
+    state.isLoadingMapData,
   ]);
 
   // Adicione este useEffect para limpar o cache periodicamente

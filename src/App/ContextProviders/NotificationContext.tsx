@@ -38,6 +38,10 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+const generateUniqueId = (): number => {
+  return Date.now() + Math.floor(Math.random() * 10000);
+};
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -47,7 +51,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const addNotification = useCallback(
     (type: NotificationType, message: string, details?: string | Record<string, unknown>) => {
-      const id = Date.now();
+      const id = generateUniqueId();
       const notification: Notification = {
         id,
         type,
@@ -56,9 +60,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         timestamp: new Date(),
       };
 
-      setNotifications(prev => [...prev, notification]);
+      // Verificar se já existe uma notificação com mensagem idêntica para evitar duplicação
+      setNotifications(prev => {
+        // Se já temos uma notificação com a mesma mensagem, substituí-la em vez de adicionar uma nova
+        const duplicateIndex = prev.findIndex(n => n.message === message && n.type === type);
 
-      // Remover notificação após 5 segundos (exceto para erros)
+        if (duplicateIndex >= 0) {
+          const updatedNotifications = [...prev];
+          updatedNotifications[duplicateIndex] = notification;
+          return updatedNotifications;
+        }
+
+        // Caso contrário, adicionar nova notificação
+        return [...prev, notification];
+      });
+
       if (type !== 'error') {
         setTimeout(() => {
           removeNotification(id);

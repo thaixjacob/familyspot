@@ -20,6 +20,8 @@ import AuthService from '../../App/Services/AuthService';
 import LoadingSpinner from '../../SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from '../../SharedComponents/ErrorBoundary/ErrorBoundary';
 import AuthErrorFallback from './AuthErrorFallback';
+import { handleFirestoreOfflineError } from '../Map/ErrorHandling/MapErrorHandler';
+import NotificationService from '../../App/Services/notificationService';
 
 interface FormErrors {
   email?: string;
@@ -88,7 +90,9 @@ const Login = () => {
         replace: true,
       });
     } catch (error) {
-      if (error instanceof Error) {
+      // Tentar tratar como erro de offline primeiro
+      if (error instanceof Error && !handleFirestoreOfflineError(error)) {
+        // Se não for erro de offline, continuar com o tratamento normal dos erros de autenticação
         if (error.message.includes('auth/invalid-email')) {
           setError('Email inválido');
         } else if (error.message.includes('auth/wrong-password')) {
@@ -97,9 +101,8 @@ const Login = () => {
           setError('Usuário não encontrado');
         } else {
           setError('Erro ao fazer login. Tente novamente.');
+          NotificationService.error('Erro ao acessar o banco de dados', { message: error.message });
         }
-      } else {
-        setError('Erro desconhecido ao fazer login');
       }
     } finally {
       setLoading(false);

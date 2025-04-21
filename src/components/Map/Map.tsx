@@ -28,6 +28,10 @@ import MapControls from './MapControls';
 import AddPlaceForm from './AddPlaceForm';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from './constants';
 import MapStatusIndicator from './MapStatusIndicator';
+import MapErrorBoundary from './ErrorHandling/MapErrorBoundary';
+import MapErrorHandler, { handleMapError } from './ErrorHandling/MapErrorHandler';
+import NetworkStatusMonitor from './ErrorHandling/NetworkStatusMonitor';
+import MapLoadingError from './ErrorHandling/MapLoadingError';
 
 interface MapProps {
   places: Place[];
@@ -91,6 +95,7 @@ const Map = ({
     isPanning: false,
   });
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const { state: userState } = useUser();
@@ -167,61 +172,140 @@ const Map = ({
 
   const proceedWithGeolocation = useCallback(() => {
     if (!isGoogleMapsReady) {
-      NotificationService.error('Google Maps ainda está carregando. Tente novamente em instantes.');
+      handleMapError(new Error('Google Maps API not ready'), 'map_load_error', {
+        context: 'geolocation_lookup',
+      });
       return;
     }
 
     setState(prev => ({ ...prev, isLocationLoading: true, isNearbyMode: true }));
 
+    // Definir um timeout de fallback para casos em que a geolocalização trava
+    const timeoutId = setTimeout(() => {
+      if (state.isLocationLoading) {
+        handleMapError(new Error('Geolocation request timed out'), 'location_unavailable', {
+          context: 'extended_timeout',
+        });
+        setState(prev => ({ ...prev, isLocationLoading: false }));
+      }
+    }, 12000); // 12 segundos de timeout de segurança
+
     navigator.geolocation.getCurrentPosition(
       position => {
-        const userPos = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
+        // Limpar o timeout de segurança
+        clearTimeout(timeoutId);
 
-        setState(prev => ({ ...prev, userLocation: userPos }));
+        // Extrair e validar as coordenadas
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
 
-        const nearby = calculateNearbyPlaces(userPos, places);
-
-        setState(prev => ({
-          ...prev,
-          nearbyPlaces: nearby,
-          isLocationLoading: false,
-        }));
-
-        if (onNearbyPlacesUpdate) {
-          onNearbyPlacesUpdate(nearby);
+        // Validação básica de coordenadas
+        if (
+          isNaN(latitude) ||
+          isNaN(longitude) ||
+          latitude < -90 ||
+          latitude > 90 ||
+          longitude < -180 ||
+          longitude > 180
+        ) {
+          handleMapError(new Error('Invalid coordinates received'), 'location_unavailable', {
+            latitude,
+            longitude,
+          });
+          setState(prev => ({ ...prev, isLocationLoading: false, isNearbyMode: false }));
+          return;
         }
 
-        if (userState.isAuthenticated) {
-          if (nearby.length === 0) {
-            NotificationService.info(
-              'Não encontramos lugares próximos a você em um raio de 10km. Você pode tentar aumentar o zoom do mapa para ver mais lugares ou adicionar um novo lugar para ajudar outras famílias!'
-            );
-          } else {
-            NotificationService.success(
-              `Ótimo! Encontramos ${nearby.length} lugares próximos a você em um raio de 10km!`
-            );
+        const userPos = { lat: latitude, lng: longitude };
+
+        try {
+          setState(prev => ({ ...prev, userLocation: userPos }));
+
+          // Calcular lugares próximos com tratamento de erro
+          let nearby: Place[] = [];
+          try {
+            nearby = calculateNearbyPlaces(userPos, places);
+          } catch (calculationError) {
+            // Registrar erro, mas continuar o fluxo
+            logError(calculationError, 'nearby_places_calculation_error');
+            nearby = []; // Falha graciosamente com lista vazia
           }
+
+          setState(prev => ({
+            ...prev,
+            nearbyPlaces: nearby,
+            isLocationLoading: false,
+          }));
+
+          if (onNearbyPlacesUpdate) {
+            onNearbyPlacesUpdate(nearby);
+          }
+
+          // Feedback para o usuário
+          if (userState.isAuthenticated) {
+            if (nearby.length === 0) {
+              NotificationService.info(
+                'Não encontramos lugares próximos a você em um raio de 10km. Você pode tentar aumentar o zoom do mapa para ver mais lugares ou adicionar um novo lugar para ajudar outras famílias!',
+                { radius: '10km', location: `${latitude.toFixed(2)},${longitude.toFixed(2)}` }
+              );
+            } else {
+              NotificationService.success(
+                `Ótimo! Encontramos ${nearby.length} lugares próximos a você em um raio de 10km!`,
+                { count: nearby.length }
+              );
+            }
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          handleMapError(error, 'places_fetch_error', {
+            context: 'nearby_processing',
+            coordinates: `${latitude.toFixed(4)},${longitude.toFixed(4)}`,
+          });
+          setState(prev => ({ ...prev, isNearbyMode: false, isLocationLoading: false }));
         }
       },
       error => {
-        logError(error, 'map_geolocation_error');
-        if (userState.isAuthenticated) {
-          NotificationService.error(
-            'Não conseguimos acessar sua localização. Verifique se o GPS está ativado e se você permitiu o acesso à localização.'
-          );
+        // Limpar o timeout de segurança
+        clearTimeout(timeoutId);
+
+        // Tratar erros específicos de geolocalização
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            handleMapError(error, 'location_permission_denied', { errorCode: error.code });
+            break;
+          case error.POSITION_UNAVAILABLE:
+            handleMapError(error, 'location_unavailable', {
+              errorCode: error.code,
+              message: error.message,
+            });
+            break;
+          case error.TIMEOUT:
+            handleMapError(error, 'location_unavailable', {
+              errorCode: error.code,
+              context: 'timeout',
+            });
+            break;
+          default:
+            handleMapError(error, 'location_unavailable', { errorCode: error.code });
         }
+
         setState(prev => ({ ...prev, isNearbyMode: false, isLocationLoading: false }));
       },
       {
         enableHighAccuracy: true,
-        timeout: 5000,
+        timeout: 10000, // Aumentado para 10 segundos para maior tolerância
         maximumAge: 0,
       }
     );
-  }, [places, userState.isAuthenticated, onNearbyPlacesUpdate, isGoogleMapsReady]);
+
+    return () => clearTimeout(timeoutId); // Limpar o timeout se o componente desmontar
+  }, [
+    places,
+    userState.isAuthenticated,
+    onNearbyPlacesUpdate,
+    isGoogleMapsReady,
+    state.isLocationLoading,
+  ]);
 
   const checkBrowserPermission = useCallback(async () => {
     try {
@@ -245,13 +329,15 @@ const Map = ({
 
   const handleNearMeClick = useCallback(
     async (hasPermission = false, isManualClick = false) => {
+      // Verificar se o Google Maps está pronto
       if (!isGoogleMapsReady) {
-        NotificationService.error(
-          'Google Maps ainda está carregando. Tente novamente em instantes.'
-        );
+        handleMapError(new Error('Google Maps not ready'), 'map_load_error', {
+          context: 'near_me_click',
+        });
         return;
       }
 
+      // Verificar o tempo entre cliques (throttling)
       if (isManualClick) {
         const now = Date.now();
         const timeSinceLastClick = now - lastClickTime.current;
@@ -267,40 +353,69 @@ const Map = ({
         lastClickTime.current = now;
       }
 
+      // Verificar se o navegador suporta geolocalização
       if (!navigator.geolocation) {
-        NotificationService.error(
-          'Parece que seu navegador não suporta geolocalização. Tente usar um navegador mais recente.'
-        );
+        handleMapError(new Error('Geolocation not supported'), 'location_unavailable', {
+          browserName: navigator.userAgent,
+        });
         return;
       }
 
+      // Se já possui permissão, prosseguir
       if (hasPermission) {
         proceedWithGeolocation();
         return;
       }
 
+      // Verificar permissão do navegador
       if (state.hasLocationPermission === null) {
-        const browserHasPermission = await checkBrowserPermission();
-        if (browserHasPermission) {
-          proceedWithGeolocation();
+        try {
+          const browserHasPermission = await checkBrowserPermission();
+          if (browserHasPermission) {
+            proceedWithGeolocation();
+            return;
+          }
+        } catch (error) {
+          handleMapError(error, 'location_unavailable', { context: 'permission_check' });
           return;
         }
       }
 
+      // Solicitar permissão de localização
       navigator.geolocation.getCurrentPosition(
         () => {
+          // Sucesso - permissão concedida
           setState(prev => ({ ...prev, hasLocationPermission: true }));
           proceedWithGeolocation();
         },
-        () => {
+        error => {
+          // Erro ao obter localização
           setState(prev => ({ ...prev, hasLocationPermission: false }));
-          NotificationService.error(
-            'Para usar a funcionalidade "Próximo a Mim", precisamos que você permita o seu navegador a acessar sua localização.'
-          );
+
+          // Determinar o tipo específico de erro de geolocalização
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              handleMapError(error, 'location_permission_denied', { errorCode: error.code });
+              break;
+            case error.POSITION_UNAVAILABLE:
+              handleMapError(error, 'location_unavailable', {
+                errorCode: error.code,
+                message: error.message,
+              });
+              break;
+            case error.TIMEOUT:
+              handleMapError(error, 'location_unavailable', {
+                errorCode: error.code,
+                context: 'timeout',
+              });
+              break;
+            default:
+              handleMapError(error, 'location_unavailable', { errorCode: error.code });
+          }
         },
         {
           enableHighAccuracy: true,
-          timeout: 5000,
+          timeout: 8000,
           maximumAge: 0,
         }
       );
@@ -516,13 +631,16 @@ const Map = ({
     state.isLoadingMapData,
   ]);
 
-  // Adicione este useEffect para limpar o cache periodicamente
   useEffect(() => {
     const cacheCleanupInterval = setInterval(() => {
-      if (cacheEnabled.current) {
-        placesCache.current = clearExpiredCache(placesCache.current);
+      try {
+        if (cacheEnabled.current) {
+          placesCache.current = clearExpiredCache(placesCache.current);
+        }
+      } catch (error) {
+        logError(error, 'cache_cleanup_error');
       }
-    }, 60000); // Verificar a cada minuto
+    }, 60000);
 
     return () => {
       clearInterval(cacheCleanupInterval);
@@ -806,249 +924,341 @@ const Map = ({
     };
   };
 
-  if (loadError || !isLoaded) {
+  // Função para reiniciar o componente do mapa
+  const handleReset = useCallback(() => {
+    setResetKey(prev => prev + 1);
+    invalidateCache();
+    setState(prev => ({
+      ...prev,
+      needsPlaceUpdate: true,
+      isLoadingMapData: false,
+      isPanning: false,
+    }));
+  }, [invalidateCache]);
+
+  const handleNetworkStatusChange = useCallback((isOnline: boolean) => {
+    if (isOnline) {
+      // Quando a conexão é restabelecida, atualizar os dados
+      setState(prev => ({
+        ...prev,
+        needsPlaceUpdate: true,
+        isLoadingMapData: false,
+      }));
+    }
+  }, []);
+
+  // Gerenciar o erro de carregamento do mapa
+  if (loadError) {
+    return (
+      <MapLoadingError error={loadError.toString()} onRetry={() => window.location.reload()} />
+    );
+  }
+
+  // Exibir carregador enquanto o mapa está sendo carregado
+  if (!isLoaded) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-gray-600 text-center">
           <LoadingSpinner size="lg" color="text-gray-600" />
           <p className="text-lg font-medium mt-4">Carregando mapa...</p>
+          <p className="text-sm text-gray-500 mt-2">Isso pode levar alguns segundos...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-full relative">
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        zoom={state.userLocation ? 15 : 8}
-        center={state.userLocation || center}
-        onClick={handleMapClick}
-        onLoad={handleMapLoad}
-        options={{
-          styles: [
-            {
-              featureType: 'poi',
-              elementType: 'labels',
-              stylers: [{ visibility: 'on' }],
-            },
-          ],
-          gestureHandling: 'greedy',
-          fullscreenControl: true,
-          zoomControl: true,
-          streetViewControl: true,
-          mapTypeControl: true,
-        }}
-      >
-        <MapStatusIndicator
-          isLoading={state.isLoadingMapData}
-          placesCount={state.visiblePlaces.length}
-          isPanning={state.isPanning}
-          showNeedsSearch={
-            !state.isNearbyMode && state.visiblePlaces.length === 0 && !state.isLoadingMapData
-          }
-        />
-        {state.visiblePlaces.map(place => (
-          <Marker
-            key={place.id}
-            position={{ lat: place.location.latitude, lng: place.location.longitude }}
-            onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
-            icon={getMarkerIcon(place.category)}
-            animation={google.maps.Animation.DROP} // Animação de queda para os marcadores
-          />
-        ))}
-        {state.userLocation && (
-          <>
-            <Marker
-              position={state.userLocation}
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 6,
-                fillColor: '#4285F4',
-                fillOpacity: 1,
-                strokeColor: 'white',
-                strokeWeight: 2,
-              }}
-              zIndex={1000}
-            />
-            <Circle
-              center={state.userLocation}
-              radius={50}
-              options={{
-                strokeColor: '#4285F4',
-                strokeOpacity: 0.8,
-                strokeWeight: 1,
-                fillColor: '#4285F4',
-                fillOpacity: 0.15,
-              }}
-            />
-          </>
-        )}
-
-        {state.newPin && (
-          <Marker
-            position={state.newPin}
-            animation={google.maps.Animation.DROP}
-            icon={{
-              url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-              scaledSize: new google.maps.Size(40, 40),
-              anchor: new google.maps.Point(20, 40),
-            }}
-            zIndex={1000}
-          />
-        )}
-
-        {state.selectedPlace && (
-          <InfoWindow
-            position={{
-              lat: state.selectedPlace.location.latitude,
-              lng: state.selectedPlace.location.longitude,
-            }}
-            onCloseClick={() => setState(prev => ({ ...prev, selectedPlace: null }))}
-          >
-            <div className="p-2">
-              <h3 className="font-bold text-lg">{state.selectedPlace.name}</h3>
-              <p className="text-sm text-gray-600">{state.selectedPlace.category}</p>
-              <p className="mt-1">{state.selectedPlace.description}</p>
+    <NetworkStatusMonitor onStatusChange={handleNetworkStatusChange}>
+      <MapErrorBoundary
+        onReset={handleReset}
+        fallback={
+          <div className="h-screen w-full flex items-center justify-center bg-gray-100">
+            <div className="bg-white p-8 rounded-lg shadow-lg max-w-md">
+              <div className="flex items-center justify-center mb-6">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-16 w-16 text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-center mb-4">Erro no mapa</h2>
+              <p className="text-gray-600 mb-6 text-center">
+                Ocorreu um erro ao carregar o mapa. Por favor, tente novamente.
+              </p>
+              <div className="flex flex-col space-y-2">
+                <button
+                  onClick={handleReset}
+                  className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Tentar novamente
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Recarregar página
+                </button>
+              </div>
             </div>
-          </InfoWindow>
-        )}
-      </GoogleMap>
-
-      {/* Indicador para encorajar a exploração do mapa */}
-      {!state.isLoadingMapData && state.visiblePlaces.length < 3 && state.currentMapBounds && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10 bg-white bg-opacity-90 px-4 py-2 rounded-full shadow-md">
-          <div className="flex items-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-gray-500 mr-2"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-              />
-            </svg>
-            <span className="text-gray-700 text-sm">Mova o mapa para explorar mais lugares</span>
           </div>
-        </div>
-      )}
-
-      {/* Indicador de área vazia */}
-      {!state.isLoadingMapData && state.visiblePlaces.length === 0 && !state.isNearbyMode && (
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-yellow-50 bg-opacity-90 px-4 py-2 rounded-full shadow-md">
-          <div className="flex items-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-yellow-500 mr-2"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+        }
+      >
+        <MapErrorHandler onReload={handleReset}>
+          <div className="h-screen w-full relative" key={`map-container-${resetKey}`}>
+            <GoogleMap
+              mapContainerStyle={mapContainerStyle}
+              zoom={state.userLocation ? 15 : 8}
+              center={state.userLocation || center}
+              onClick={handleMapClick}
+              onLoad={handleMapLoad}
+              options={{
+                styles: [
+                  {
+                    featureType: 'poi',
+                    elementType: 'labels',
+                    stylers: [{ visibility: 'on' }],
+                  },
+                ],
+                gestureHandling: 'greedy',
+                fullscreenControl: true,
+                zoomControl: true,
+                streetViewControl: true,
+                mapTypeControl: true,
+              }}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              <MapStatusIndicator
+                isLoading={state.isLoadingMapData}
+                placesCount={state.visiblePlaces.length}
+                isPanning={state.isPanning}
+                showNeedsSearch={
+                  !state.isNearbyMode && state.visiblePlaces.length === 0 && !state.isLoadingMapData
+                }
               />
-            </svg>
-            <span className="text-yellow-700 text-sm">Nenhum lugar encontrado nesta área</span>
-          </div>
-        </div>
-      )}
+              {state.visiblePlaces.map(place => (
+                <Marker
+                  key={place.id}
+                  position={{ lat: place.location.latitude, lng: place.location.longitude }}
+                  onClick={() => setState(prev => ({ ...prev, selectedPlace: place }))}
+                  icon={getMarkerIcon(place.category)}
+                  animation={google.maps.Animation.DROP} // Animação de queda para os marcadores
+                />
+              ))}
+              {state.userLocation && (
+                <>
+                  <Marker
+                    position={state.userLocation}
+                    icon={{
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 6,
+                      fillColor: '#4285F4',
+                      fillOpacity: 1,
+                      strokeColor: 'white',
+                      strokeWeight: 2,
+                    }}
+                    zIndex={1000}
+                  />
+                  <Circle
+                    center={state.userLocation}
+                    radius={50}
+                    options={{
+                      strokeColor: '#4285F4',
+                      strokeOpacity: 0.8,
+                      strokeWeight: 1,
+                      fillColor: '#4285F4',
+                      fillOpacity: 0.15,
+                    }}
+                  />
+                </>
+              )}
 
-      <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
-        {!state.isAddingPlace ? (
-          <MapControls
-            isAddingPlace={state.isAddingPlace}
-            isLocationLoading={state.isLocationLoading}
-            userState={userState}
-            onAddPlaceClick={() => setState(prev => ({ ...prev, isAddingPlace: true }))}
-            onNearMeClick={() => handleNearMeClick(false, true)}
-          />
-        ) : (
-          <ErrorBoundary
-            fallback={
-              <div className="space-y-4">
-                <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                  <h3 className="text-red-800 font-medium mb-2">Erro ao adicionar local</h3>
-                  <p className="text-red-600 text-sm mb-3">
-                    Ocorreu um erro ao processar o formulário. Por favor, tente novamente.
-                  </p>
+              {state.newPin && (
+                <Marker
+                  position={state.newPin}
+                  animation={google.maps.Animation.DROP}
+                  icon={{
+                    url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 40),
+                  }}
+                  zIndex={1000}
+                />
+              )}
+
+              {state.selectedPlace && (
+                <InfoWindow
+                  position={{
+                    lat: state.selectedPlace.location.latitude,
+                    lng: state.selectedPlace.location.longitude,
+                  }}
+                  onCloseClick={() => setState(prev => ({ ...prev, selectedPlace: null }))}
+                >
+                  <div className="p-2">
+                    <h3 className="font-bold text-lg">{state.selectedPlace.name}</h3>
+                    <p className="text-sm text-gray-600">{state.selectedPlace.category}</p>
+                    <p className="mt-1">{state.selectedPlace.description}</p>
+                  </div>
+                </InfoWindow>
+              )}
+            </GoogleMap>
+
+            {/* Indicador para encorajar a exploração do mapa */}
+            {!state.isLoadingMapData &&
+              state.visiblePlaces.length < 3 &&
+              state.currentMapBounds && (
+                <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10 bg-white bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+                  <div className="flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-gray-500 mr-2"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                      />
+                    </svg>
+                    <span className="text-gray-700 text-sm">
+                      Mova o mapa para explorar mais lugares
+                    </span>
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, isAddingPlace: false }))}
-                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
+              )}
+
+            {/* Indicador de área vazia */}
+            {!state.isLoadingMapData && state.visiblePlaces.length === 0 && !state.isNearbyMode && (
+              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-yellow-50 bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+                <div className="flex items-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-yellow-500 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
-                    Voltar
-                  </button>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Recarregar
-                  </button>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <span className="text-yellow-700 text-sm">
+                    Nenhum lugar encontrado nesta área
+                  </span>
                 </div>
               </div>
-            }
-          >
-            <AddPlaceForm
-              newPlaceDetails={state.newPlaceDetails}
-              newPlaceCategory={state.newPlaceCategory}
-              newPlacePriceRange={state.newPlacePriceRange}
-              newPlaceActivityType={state.newPlaceActivityType}
-              newPlaceAgeGroups={state.newPlaceAgeGroups}
-              newPlaceAmenities={state.newPlaceAmenities}
-              isCustomNameRequired={state.isCustomNameRequired}
-              customPlaceName={state.customPlaceName}
-              categoryDetected={state.categoryDetected}
-              isLoadingPlaceDetails={state.isLoadingPlaceDetails}
-              onCategoryChange={category =>
-                setState(prev => ({ ...prev, newPlaceCategory: category, categoryDetected: true }))
-              }
-              onPriceRangeChange={priceRange =>
-                setState(prev => ({ ...prev, newPlacePriceRange: priceRange }))
-              }
-              onActivityTypeChange={activityType =>
-                setState(prev => ({ ...prev, newPlaceActivityType: activityType }))
-              }
-              onAgeGroupChange={ageGroups =>
-                setState(prev => ({ ...prev, newPlaceAgeGroups: ageGroups }))
-              }
-              onAmenitiesChange={amenities =>
-                setState(prev => ({ ...prev, newPlaceAmenities: amenities }))
-              }
-              onCustomNameChange={name => setState(prev => ({ ...prev, customPlaceName: name }))}
-              onCancel={() => {
-                setState(prev => ({
-                  ...prev,
-                  isAddingPlace: false,
-                  newPin: null,
-                  newPlaceDetails: null,
-                  isCustomNameRequired: false,
-                  customPlaceName: '',
-                }));
-              }}
-              onSave={saveNewPlace}
-              isSaveDisabled={
-                !state.newPin ||
-                !state.newPlaceDetails ||
-                !state.newPlaceCategory ||
-                (state.isCustomNameRequired && !state.customPlaceName)
-              }
-            />
-          </ErrorBoundary>
-        )}
-      </div>
-      {state.currentMapBounds && !state.isNearbyMode && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10"></div>
-      )}
-    </div>
+            )}
+
+            <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-md z-10 max-w-md overflow-y-auto max-h-[90vh]">
+              {!state.isAddingPlace ? (
+                <MapControls
+                  isAddingPlace={state.isAddingPlace}
+                  isLocationLoading={state.isLocationLoading}
+                  userState={userState}
+                  onAddPlaceClick={() => setState(prev => ({ ...prev, isAddingPlace: true }))}
+                  onNearMeClick={() => handleNearMeClick(false, true)}
+                />
+              ) : (
+                <ErrorBoundary
+                  fallback={
+                    <div className="space-y-4">
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                        <h3 className="text-red-800 font-medium mb-2">Erro ao adicionar local</h3>
+                        <p className="text-red-600 text-sm mb-3">
+                          Ocorreu um erro ao processar o formulário. Por favor, tente novamente.
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setState(prev => ({ ...prev, isAddingPlace: false }))}
+                          className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                        >
+                          Recarregar
+                        </button>
+                      </div>
+                    </div>
+                  }
+                >
+                  <AddPlaceForm
+                    newPlaceDetails={state.newPlaceDetails}
+                    newPlaceCategory={state.newPlaceCategory}
+                    newPlacePriceRange={state.newPlacePriceRange}
+                    newPlaceActivityType={state.newPlaceActivityType}
+                    newPlaceAgeGroups={state.newPlaceAgeGroups}
+                    newPlaceAmenities={state.newPlaceAmenities}
+                    isCustomNameRequired={state.isCustomNameRequired}
+                    customPlaceName={state.customPlaceName}
+                    categoryDetected={state.categoryDetected}
+                    isLoadingPlaceDetails={state.isLoadingPlaceDetails}
+                    onCategoryChange={category =>
+                      setState(prev => ({
+                        ...prev,
+                        newPlaceCategory: category,
+                        categoryDetected: true,
+                      }))
+                    }
+                    onPriceRangeChange={priceRange =>
+                      setState(prev => ({ ...prev, newPlacePriceRange: priceRange }))
+                    }
+                    onActivityTypeChange={activityType =>
+                      setState(prev => ({ ...prev, newPlaceActivityType: activityType }))
+                    }
+                    onAgeGroupChange={ageGroups =>
+                      setState(prev => ({ ...prev, newPlaceAgeGroups: ageGroups }))
+                    }
+                    onAmenitiesChange={amenities =>
+                      setState(prev => ({ ...prev, newPlaceAmenities: amenities }))
+                    }
+                    onCustomNameChange={name =>
+                      setState(prev => ({ ...prev, customPlaceName: name }))
+                    }
+                    onCancel={() => {
+                      setState(prev => ({
+                        ...prev,
+                        isAddingPlace: false,
+                        newPin: null,
+                        newPlaceDetails: null,
+                        isCustomNameRequired: false,
+                        customPlaceName: '',
+                      }));
+                    }}
+                    onSave={saveNewPlace}
+                    isSaveDisabled={
+                      !state.newPin ||
+                      !state.newPlaceDetails ||
+                      !state.newPlaceCategory ||
+                      (state.isCustomNameRequired && !state.customPlaceName)
+                    }
+                  />
+                </ErrorBoundary>
+              )}
+            </div>
+            {state.currentMapBounds && !state.isNearbyMode && (
+              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10"></div>
+            )}
+          </div>
+        </MapErrorHandler>
+      </MapErrorBoundary>
+    </NetworkStatusMonitor>
   );
 };
 

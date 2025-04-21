@@ -1,7 +1,7 @@
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { Place } from '../../types/Place';
-import { logError } from '../../utils/logger';
+import { logError, logEvent } from '../../utils/logger';
 
 export const mapGoogleTypesToCategory = (types: string[]): string | null => {
   if (types.includes('park')) return 'parks';
@@ -112,6 +112,7 @@ export const getPlaceDetails = async (
 
 /**
  * Busca lugares dentro de limites geográficos específicos do Firestore
+ * com tratamento de erros aprimorado e informações de diagnóstico.
  */
 export const fetchPlacesInBounds = async (
   mapBounds: {
@@ -121,42 +122,153 @@ export const fetchPlacesInBounds = async (
     west: number;
   } | null
 ): Promise<Place[]> => {
+  // Validar parâmetros de entrada
   if (!mapBounds) {
+    logError(new Error('Null map bounds provided'), 'fetch_places_null_bounds');
     return [];
   }
 
+  // Validar limites do mapa
+  if (!isValidBounds(mapBounds)) {
+    logError(
+      new Error(`Invalid map bounds: ${JSON.stringify(mapBounds)}`),
+      'fetch_places_invalid_bounds'
+    );
+    return [];
+  }
+
+  const startTime = performance.now();
+
   try {
+    // Obter referência à coleção
     const placesRef = collection(db, 'places');
-    const placesSnapshot = await getDocs(placesRef);
 
+    // Adicionar timeout para evitar operações que ficam presas
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Timeout fetching places from Firestore'));
+      }, 15000); // 15 segundos de timeout
+    });
+
+    // Race entre a busca real e o timeout
+    const placesSnapshot = (await Promise.race([getDocs(placesRef), timeoutPromise])) as any;
+
+    // Filtrar lugares baseado nos limites do mapa
     const filteredPlaces = placesSnapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as Place;
-      })
-      .filter(place => {
-        const lat = place.location.latitude;
-        const lng = place.location.longitude;
+      .map((doc: import('firebase/firestore').QueryDocumentSnapshot) => {
+        try {
+          const data = doc.data();
 
-        return (
-          lat <= mapBounds.north &&
-          lat >= mapBounds.south &&
-          lng <= mapBounds.east &&
-          lng >= mapBounds.west
-        );
+          // Verificar se os dados necessários existem
+          if (
+            !data.location ||
+            typeof data.location.latitude !== 'number' ||
+            typeof data.location.longitude !== 'number'
+          ) {
+            logError(
+              new Error(`Invalid location data for place ${doc.id}`),
+              'fetch_places_invalid_location'
+            );
+            return null;
+          }
+
+          return {
+            ...data,
+            id: doc.id,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          } as Place;
+        } catch (docError) {
+          logError(docError, `fetch_places_doc_error_${doc.id}`);
+          return null;
+        }
+      })
+      .filter((place: Place | null): place is Place => {
+        // Filtrar places nulos (que tiveram erro no processamento)
+        if (!place) return false;
+
+        try {
+          const lat = place.location.latitude;
+          const lng = place.location.longitude;
+
+          return (
+            lat <= mapBounds.north &&
+            lat >= mapBounds.south &&
+            lng <= mapBounds.east &&
+            lng >= mapBounds.west
+          );
+        } catch (filterError) {
+          logError(filterError, `fetch_places_filter_error_${place.id}`);
+          return false;
+        }
       });
+
+    const endTime = performance.now();
+
+    // Log performance metrics em desenvolvimento
+    if (process.env.NODE_ENV === 'development') {
+      logEvent('places_fetch_performance', {
+        places_count: filteredPlaces.length,
+        duration_ms: (endTime - startTime).toFixed(2),
+      });
+    }
 
     return filteredPlaces;
   } catch (error) {
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+
+    // Log detalhado do erro para diagnóstico
     logError(error, 'fetch_places_in_bounds_error');
+
+    // Log adicional com contexto
+    logError(error, 'fetch_places_details');
+
+    // Log detalhes do erro
+    logEvent('places_fetch_error_details', {
+      bounds: mapBounds,
+      duration_ms: duration.toFixed(2),
+      error_type: error instanceof Error ? error.name : 'unknown',
+    });
+
+    // Em modo de desenvolvimento, fornecer mais detalhes
+    if (process.env.NODE_ENV === 'development') {
+      logEvent('places_fetch_debug_info', {
+        map_bounds: mapBounds,
+        operation_duration_ms: duration.toFixed(2),
+      });
+    }
+
     return [];
   }
 };
+
+/**
+ * Valida se os limites do mapa são valores numéricos válidos
+ */
+function isValidBounds(bounds: {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}): boolean {
+  return (
+    !isNaN(bounds.north) &&
+    !isNaN(bounds.south) &&
+    !isNaN(bounds.east) &&
+    !isNaN(bounds.west) &&
+    bounds.north >= bounds.south &&
+    bounds.east >= bounds.west &&
+    bounds.north >= -90 &&
+    bounds.north <= 90 &&
+    bounds.south >= -90 &&
+    bounds.south <= 90 &&
+    bounds.east >= -180 &&
+    bounds.east <= 180 &&
+    bounds.west >= -180 &&
+    bounds.west <= 180
+  );
+}
 
 /**
  * Função para calcular se a mudança nos limites é significativa

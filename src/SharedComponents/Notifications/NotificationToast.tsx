@@ -35,13 +35,6 @@ const NotificationToast: React.FC = () => {
         >
           <div>
             <p className="font-semibold">{notification.message}</p>
-            {notification.details && process.env.NODE_ENV === 'development' && (
-              <pre className="mt-2 text-sm opacity-90 whitespace-pre-wrap">
-                {typeof notification.details === 'string'
-                  ? notification.details
-                  : JSON.stringify(notification.details, null, 2)}
-              </pre>
-            )}
           </div>
           <button
             onClick={() => removeNotification(notification.id)}

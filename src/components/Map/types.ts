@@ -80,4 +80,5 @@ export interface MapState {
   minPanDistanceThreshold: number;
   overlapThreshold: number;
   isPanning: boolean;
+  isFirstLoad: boolean;
 }

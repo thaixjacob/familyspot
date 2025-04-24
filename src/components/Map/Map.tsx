@@ -108,6 +108,7 @@ const Map = ({
     minPanDistanceThreshold: 500,
     overlapThreshold: 0.3,
     isPanning: false,
+    isFirstLoad: true,
   });
   const [isGoogleMapsReady, setIsGoogleMapsReady] = useState(false);
   const [resetKey, setResetKey] = useState(0);
@@ -256,8 +257,8 @@ const Map = ({
             onNearbyPlacesUpdate(nearby);
           }
 
-          // Feedback para o usuário
-          if (userState.isAuthenticated) {
+          // Feedback para o usuário apenas no primeiro carregamento
+          if (userState.isAuthenticated && state.isFirstLoad) {
             if (nearby.length === 0) {
               NotificationService.info(
                 'Não encontramos lugares próximos a você em um raio de 10km. Você pode tentar aumentar o zoom do mapa para ver mais lugares ou adicionar um novo lugar para ajudar outras famílias!',
@@ -269,6 +270,7 @@ const Map = ({
                 { count: nearby.length }
               );
             }
+            setState(prev => ({ ...prev, isFirstLoad: false }));
           }
         } catch (error) {
           clearTimeout(timeoutId);
@@ -320,6 +322,7 @@ const Map = ({
     onNearbyPlacesUpdate,
     isGoogleMapsReady,
     state.isLocationLoading,
+    state.isFirstLoad,
   ]);
 
   const checkBrowserPermission = useCallback(async () => {

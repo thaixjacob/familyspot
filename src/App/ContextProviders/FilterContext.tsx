@@ -18,7 +18,7 @@ import { FilterValues } from '../../components/Filters/FilterPanel';
 
 interface FilterContextType {
   filters: FilterValues;
-  setFilters: (filters: FilterValues) => void;
+  setFilters: (filters: FilterValues | ((prev: FilterValues) => FilterValues)) => void;
   clearFilters: () => void;
 }
 
@@ -27,10 +27,28 @@ const defaultFilters: FilterValues = {
   ageGroups: [],
   priceRange: [],
   amenities: {
+    // Compartilhadas entre múltiplas categorias
+    accessibility: false,
     changingTables: false,
+    parking: false,
+    publicTransport: false,
+    drinkingWater: false,
+    foodNearby: false,
+    publicRestrooms: false,
+    petFriendly: false,
+    picnicArea: false,
+    shadedAreas: false,
+    tablesAndBenches: false,
+    nightLighting: false,
+
+    // Exclusivas de uma ou poucas categorias
+    specialNeeds: false,
+    waitingArea: false,
+    supervisedActivities: false,
+    accessibleTrails: false,
+    fencedArea: false,
     playAreas: false,
     highChairs: false,
-    accessibility: false,
     kidsMenu: false,
   },
 };

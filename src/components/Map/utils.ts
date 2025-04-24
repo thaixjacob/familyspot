@@ -151,7 +151,10 @@ export const fetchPlacesInBounds = async (
     });
 
     // Race entre a busca real e o timeout
-    const placesSnapshot = (await Promise.race([getDocs(placesRef), timeoutPromise])) as any;
+    const placesSnapshot = (await Promise.race([
+      getDocs(placesRef),
+      timeoutPromise,
+    ])) as import('firebase/firestore').QuerySnapshot;
 
     // Filtrar lugares baseado nos limites do mapa
     const filteredPlaces = placesSnapshot.docs

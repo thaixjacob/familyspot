@@ -64,14 +64,29 @@ const Map = ({
     newPin: null,
     newPlaceDetails: null,
     newPlaceCategory: '',
-    newPlaceAgeGroups: ['0-1', '1-3', '3-5', '5+'],
-    newPlacePriceRange: '$',
-    newPlaceActivityType: 'outdoor',
+    newPlaceAgeGroups: [],
+    newPlacePriceRange: '',
+    newPlaceActivityType: '',
     newPlaceAmenities: {
+      accessibility: false,
       changingTables: false,
+      parking: false,
+      publicTransport: false,
+      drinkingWater: false,
+      foodNearby: false,
+      publicRestrooms: false,
+      petFriendly: false,
+      picnicArea: false,
+      shadedAreas: false,
+      tablesAndBenches: false,
+      nightLighting: false,
+      specialNeeds: false,
+      waitingArea: false,
+      supervisedActivities: false,
+      accessibleTrails: false,
+      fencedArea: false,
       playAreas: false,
       highChairs: false,
-      accessibility: false,
       kidsMenu: false,
     },
     isAddingPlace: false,
@@ -843,14 +858,29 @@ const Map = ({
         newPin: null,
         newPlaceDetails: null,
         newPlaceCategory: '',
-        newPlaceAgeGroups: ['0-1', '1-3', '3-5', '5+'],
-        newPlacePriceRange: '$',
-        newPlaceActivityType: 'outdoor',
+        newPlaceAgeGroups: [],
+        newPlacePriceRange: '',
+        newPlaceActivityType: '',
         newPlaceAmenities: {
+          accessibility: false,
           changingTables: false,
+          parking: false,
+          publicTransport: false,
+          drinkingWater: false,
+          foodNearby: false,
+          publicRestrooms: false,
+          petFriendly: false,
+          picnicArea: false,
+          shadedAreas: false,
+          tablesAndBenches: false,
+          nightLighting: false,
+          specialNeeds: false,
+          waitingArea: false,
+          supervisedActivities: false,
+          accessibleTrails: false,
+          fencedArea: false,
           playAreas: false,
           highChairs: false,
-          accessibility: false,
           kidsMenu: false,
         },
         isAddingPlace: false,
@@ -1039,9 +1069,6 @@ const Map = ({
                 isLoading={state.isLoadingMapData}
                 placesCount={state.visiblePlaces.length}
                 isPanning={state.isPanning}
-                showNeedsSearch={
-                  !state.isNearbyMode && state.visiblePlaces.length === 0 && !state.isLoadingMapData
-                }
               />
               {state.visiblePlaces.map(place => (
                 <Marker
@@ -1114,11 +1141,11 @@ const Map = ({
             {!state.isLoadingMapData &&
               state.visiblePlaces.length < 3 &&
               state.currentMapBounds && (
-                <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-10 bg-white bg-opacity-90 px-4 py-2 rounded-full shadow-md">
+                <div className="absolute top-[60px] left-1/2 transform -translate-x-1/2 z-10 bg-blue-50 bg-opacity-90 px-4 py-2 rounded-full shadow-md">
                   <div className="flex items-center">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-gray-500 mr-2"
+                      className="h-5 w-5 text-blue-500 mr-2"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -1130,8 +1157,8 @@ const Map = ({
                         d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
                       />
                     </svg>
-                    <span className="text-gray-700 text-sm">
-                      Mova o mapa para explorar mais lugares
+                    <span className="text-blue-700 text-sm">
+                      Explore o mapa para descobrir mais lugares
                     </span>
                   </div>
                 </div>
@@ -1248,6 +1275,7 @@ const Map = ({
                       !state.newPlaceCategory ||
                       (state.isCustomNameRequired && !state.customPlaceName)
                     }
+                    isSaving={false}
                   />
                 </ErrorBoundary>
               )}

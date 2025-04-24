@@ -16,14 +16,14 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   };
 
   return (
-    <div className="flex justify-center items-center">
-      <div
+    <span className="inline-flex">
+      <span
         className={`${sizeClasses[size]} ${color} animate-spin rounded-full border-4 border-solid border-current border-r-transparent`}
         role="status"
       >
         <span className="sr-only">Carregando...</span>
-      </div>
-    </div>
+      </span>
+    </span>
   );
 };
 

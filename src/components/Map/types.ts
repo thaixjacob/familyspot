@@ -14,32 +14,43 @@ export interface NewPlaceDetails {
 }
 
 export interface PlaceAmenities {
+  // ✅ Compartilhadas entre múltiplas categorias
+  accessibility: boolean;
   changingTables: boolean;
+  parking: boolean;
+  publicTransport: boolean;
+  drinkingWater: boolean;
+  foodNearby: boolean;
+  publicRestrooms: boolean;
+  petFriendly: boolean;
+  picnicArea: boolean;
+  shadedAreas: boolean;
+  tablesAndBenches: boolean;
+  nightLighting: boolean;
+
+  // ✳️ Exclusivas de uma ou poucas categorias
+  specialNeeds: boolean;
+  waitingArea: boolean;
+  supervisedActivities: boolean;
+  accessibleTrails: boolean;
+  fencedArea: boolean;
   playAreas: boolean;
   highChairs: boolean;
-  accessibility: boolean;
   kidsMenu: boolean;
 }
 
 export interface MapState {
   selectedPlace: Place | null;
   newPin: { lat: number; lng: number } | null;
-  newPlaceDetails: {
-    name: string;
-    address: string;
-    place_id: string;
-  } | null;
+  newPlaceDetails: NewPlaceDetails | null;
   newPlaceCategory: string;
   newPlaceAgeGroups: string[];
   newPlacePriceRange: string;
   newPlaceActivityType: string;
-  newPlaceAmenities: {
-    changingTables: boolean;
-    playAreas: boolean;
-    highChairs: boolean;
-    accessibility: boolean;
-    kidsMenu: boolean;
-  };
+
+  // 👇 Atualizado para usar a nova interface
+  newPlaceAmenities: PlaceAmenities;
+
   isAddingPlace: boolean;
   isLoadingPlaceDetails: boolean;
   categoryDetected: boolean;
@@ -66,7 +77,7 @@ export interface MapState {
     east: number;
     west: number;
   } | null;
-  minPanDistanceThreshold: number; // Distância mínima em metros para considerar uma mudança significativa
-  overlapThreshold: number; // Porcentagem de sobreposição para considerar uma mudança significativa
+  minPanDistanceThreshold: number;
+  overlapThreshold: number;
   isPanning: boolean;
 }

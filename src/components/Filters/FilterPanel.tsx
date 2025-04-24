@@ -1,36 +1,131 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useFilter } from '../../App/ContextProviders/FilterContext';
 
 export interface FilterValues {
   category: string;
   ageGroups: string[];
   priceRange: string[];
-  amenities: {
-    changingTables: boolean;
-    playAreas: boolean;
-    highChairs: boolean;
-    accessibility: boolean;
-    kidsMenu: boolean;
-  };
+  amenities: { [key: string]: boolean };
 }
 
 interface FilterPanelProps {
   onApplyFiltersInView?: () => void;
 }
 
+interface AmenityItem {
+  key: string;
+  label: string;
+}
+
+interface AmenitiesByCategory {
+  [key: string]: AmenityItem[];
+}
+
 const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
   const { filters, setFilters, clearFilters } = useFilter();
 
-  const handleAgeGroupChange = (age: string) => {
-    const newFilters = {
-      ...filters,
-      ageGroups: filters.ageGroups.includes(age)
-        ? filters.ageGroups.filter(a => a !== age)
-        : [...filters.ageGroups, age],
-    };
-    setFilters(newFilters);
-    onApplyFiltersInView?.();
+  const getAmenitiesForCategory = (): AmenitiesByCategory => {
+    switch (filters.category) {
+      case 'activities':
+        return {
+          accessibility: [
+            { key: 'accessibility', label: 'Rampas, elevadores, sinalização' },
+            { key: 'specialNeeds', label: 'Adaptação para necessidades especiais' },
+          ],
+          structure: [
+            { key: 'waitingArea', label: 'Área de espera confortável' },
+            { key: 'supervisedActivities', label: 'Atividades com monitores' },
+            { key: 'changingTables', label: 'Banheiros com trocador' },
+          ],
+          transport: [
+            { key: 'parking', label: 'Estacionamento no local ou próximo' },
+            { key: 'publicTransport', label: 'Transporte público próximo' },
+          ],
+          facilities: [
+            { key: 'drinkingWater', label: 'Bebedouro' },
+            { key: 'foodNearby', label: 'Local para comer' },
+          ],
+        };
+      case 'parks':
+        return {
+          accessibility: [
+            { key: 'accessibility', label: 'Carrinho/cadeirantes' },
+            { key: 'accessibleTrails', label: 'Trilhas acessíveis' },
+          ],
+          structure: [
+            { key: 'shadedAreas', label: 'Sombra' },
+            { key: 'playground', label: 'Brinquedos infantis' },
+            { key: 'picnicArea', label: 'Área para piquenique' },
+            { key: 'tablesAndBenches', label: 'Mesas e bancos' },
+            { key: 'publicRestrooms', label: 'Banheiros públicos' },
+            { key: 'changingTables', label: 'Trocador' },
+            { key: 'petFriendly', label: 'Pet-friendly' },
+            { key: 'nightLighting', label: 'Iluminação noturna' },
+          ],
+          transport: [
+            { key: 'parking', label: 'Estacionamento local ou próximo' },
+            { key: 'publicTransport', label: 'Transporte público próximo' },
+          ],
+          facilities: [
+            { key: 'drinkingWater', label: 'Bebedouro' },
+            { key: 'foodNearby', label: 'Local para comer' },
+          ],
+        };
+      case 'playgrounds':
+        return {
+          accessibility: [{ key: 'accessibility', label: 'Carrinho/cadeirantes' }],
+          structure: [
+            { key: 'shadedAreas', label: 'Sombra' },
+            { key: 'picnicArea', label: 'Área para piquenique' },
+            { key: 'tablesAndBenches', label: 'Mesas e bancos' },
+            { key: 'fencedArea', label: 'Área cercada' },
+            { key: 'petFriendly', label: 'Pet-friendly' },
+            { key: 'nightLighting', label: 'Iluminação noturna' },
+          ],
+          transport: [
+            { key: 'parking', label: 'Estacionamento local ou próximo' },
+            { key: 'publicTransport', label: 'Transporte público próximo' },
+          ],
+          facilities: [
+            { key: 'publicRestrooms', label: 'Banheiros públicos' },
+            { key: 'changingTables', label: 'Trocador' },
+            { key: 'drinkingWater', label: 'Bebedouro' },
+            { key: 'foodNearby', label: 'Local para comer perto' },
+          ],
+        };
+      case 'restaurants':
+      case 'cafes':
+        return {
+          accessibility: [{ key: 'accessibility', label: 'Carrinho/cadeirantes' }],
+          structure: [
+            { key: 'playAreas', label: 'Área de Brincar' },
+            { key: 'changingTables', label: 'Trocador' },
+            { key: 'highChairs', label: 'Cadeirão' },
+          ],
+          facilities: [{ key: 'kidsMenu', label: 'Menu Infantil' }],
+        };
+      default:
+        return {};
+    }
   };
+
+  const shouldShowPriceFilter = (): boolean => {
+    return ['restaurants', 'cafes', 'activities'].includes(filters.category);
+  };
+
+  const handleAgeGroupChange = useCallback(
+    (age: string) => {
+      const newFilters = {
+        ...filters,
+        ageGroups: filters.ageGroups.includes(age)
+          ? filters.ageGroups.filter(a => a !== age)
+          : [...filters.ageGroups, age],
+      };
+      setFilters(newFilters);
+      onApplyFiltersInView?.();
+    },
+    [filters, setFilters, onApplyFiltersInView]
+  );
 
   const handlePriceRangeChange = (price: string) => {
     const newFilters = {
@@ -43,17 +138,33 @@ const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
     onApplyFiltersInView?.();
   };
 
-  const handleAmenityChange = (
-    amenity: 'changingTables' | 'playAreas' | 'highChairs' | 'accessibility' | 'kidsMenu'
-  ) => {
-    const newFilters = {
-      ...filters,
-      amenities: {
-        ...filters.amenities,
-        [amenity]: !filters.amenities[amenity],
-      },
-    };
-    setFilters(newFilters);
+  const handleAmenityChange = (amenityKey: string) => {
+    setFilters(
+      (prevFilters: FilterValues): FilterValues => ({
+        ...prevFilters,
+        amenities: {
+          ...prevFilters.amenities,
+          [amenityKey]: !prevFilters.amenities[amenityKey],
+        },
+      })
+    );
+    onApplyFiltersInView?.();
+  };
+
+  const handleCategoryAmenitiesChange = (category: string, items: AmenityItem[]) => {
+    const allSelected = items.every(item => filters.amenities[item.key]);
+    const newAmenities = { ...filters.amenities };
+
+    items.forEach(item => {
+      newAmenities[item.key] = !allSelected;
+    });
+
+    setFilters(
+      (prevFilters: FilterValues): FilterValues => ({
+        ...prevFilters,
+        amenities: newAmenities,
+      })
+    );
     onApplyFiltersInView?.();
   };
 
@@ -61,10 +172,15 @@ const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
     const newFilters = {
       ...filters,
       category,
+      priceRange: ['restaurants', 'cafes', 'activities'].includes(category)
+        ? filters.priceRange
+        : [],
     };
     setFilters(newFilters);
     onApplyFiltersInView?.();
   };
+
+  const amenities = getAmenitiesForCategory();
 
   return (
     <div className="bg-white rounded-lg shadow-md p-5 max-w-md">
@@ -138,75 +254,91 @@ const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
         </div>
       </div>
 
-      <div className="mb-5">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Faixa de Preço</h4>
-        <div className="flex flex-wrap gap-2">
-          {['$', '$$', '$$$', '$$$$'].map(price => (
-            <button
-              key={price}
-              onClick={() => handlePriceRangeChange(price)}
-              className={`px-3 py-1 text-sm border rounded-full ${
-                filters.priceRange.includes(price)
-                  ? 'bg-blue-100 border-blue-500 text-blue-700'
-                  : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {price}
-            </button>
-          ))}
+      {shouldShowPriceFilter() && (
+        <div className="mb-5">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Faixa de Preço</h4>
+          <div className="flex flex-wrap gap-2">
+            {['$', '$$', '$$$', '$$$$'].map(price => (
+              <button
+                key={price}
+                onClick={() => handlePriceRangeChange(price)}
+                className={`px-3 py-1 text-sm border rounded-full ${
+                  filters.priceRange.includes(price)
+                    ? 'bg-blue-100 border-blue-500 text-blue-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {price}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="mb-6">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Comodidades</h4>
-        <div className="space-y-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.amenities.changingTables}
-              onChange={() => handleAmenityChange('changingTables')}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Fraldário</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.amenities.playAreas}
-              onChange={() => handleAmenityChange('playAreas')}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Área de Brincar</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.amenities.highChairs}
-              onChange={() => handleAmenityChange('highChairs')}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Cadeirão</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.amenities.accessibility}
-              onChange={() => handleAmenityChange('accessibility')}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Acessibilidade</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.amenities.kidsMenu}
-              onChange={() => handleAmenityChange('kidsMenu')}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-700">Menu Infantil</span>
-          </label>
+      {filters.category !== 'all' && (
+        <div className="mb-6">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Comodidades</h4>
+          <div className="space-y-2">
+            {Object.entries(amenities).map(([category, items]) => (
+              <div key={category} className="space-y-2">
+                <details className="border rounded group">
+                  <summary className="p-2 cursor-pointer flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className="w-4 h-4 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                      <div className="flex items-center">
+                        {category === 'accessibility' && '♿ Acessibilidade'}
+                        {category === 'structure' && '🧺 Estrutura'}
+                        {category === 'transport' && '🚗 Transporte'}
+                        {category === 'facilities' && '🍔 Alimentação'}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                          checked={items.every(item => filters.amenities[item.key])}
+                          onChange={() => handleCategoryAmenitiesChange(category, items)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </label>
+                    </div>
+                  </summary>
+                  <div className="p-2 grid grid-cols-2 gap-2">
+                    {items.map(({ key, label }) => (
+                      <label
+                        key={key}
+                        className="flex items-center p-2 border rounded hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={Boolean(filters.amenities[key])}
+                          onChange={() => handleAmenityChange(key)}
+                        />
+                        <span className="text-sm">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

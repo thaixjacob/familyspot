@@ -157,6 +157,12 @@ class AuthService {
     return !!auth.currentUser;
   }
 
+  public hasRequiredPermissions(): boolean {
+    // Por enquanto, retornamos true se o usuário estiver autenticado
+    // Você pode adicionar lógica mais complexa aqui baseada em roles ou outras permissões
+    return this.isAuthenticated();
+  }
+
   public getCurrentUser(): User | null {
     return auth.currentUser;
   }

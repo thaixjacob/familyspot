@@ -14,6 +14,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import AuthService from '../../App/Services/AuthService';
+import ForbiddenPage from '../ErrorPages/ForbiddenPage';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -24,8 +25,14 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   const authService = AuthService.getInstance();
 
   if (!authService.isAuthenticated()) {
-    // Redireciona para o login, mas salva a página que o usuário tentou acessar
+    // Se o usuário não estiver autenticado, redireciona para o login
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Se o usuário estiver autenticado mas não tiver as permissões necessárias
+  // (você pode adicionar mais verificações aqui)
+  if (!authService.hasRequiredPermissions()) {
+    return <ForbiddenPage />;
   }
 
   return <>{children}</>;

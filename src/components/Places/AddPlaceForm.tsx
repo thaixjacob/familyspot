@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Place } from '../types';
+import { Place } from '../../types';
 
 interface AddPlaceFormProps {
   onSubmit: (place: Omit<Place, 'id'>) => void;

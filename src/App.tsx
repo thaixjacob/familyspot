@@ -55,6 +55,7 @@ import MainLayout from './App/Layout/MainLayout';
 import NotificationToast from './SharedComponents/Notifications/NotificationToast';
 import LoadingSpinner from './SharedComponents/Loading/LoadingSpinner';
 import ErrorBoundary from './SharedComponents/ErrorBoundary/ErrorBoundary';
+import NotFoundPage from './components/ErrorPages/NotFoundPage';
 
 function AppContent() {
   const [allPlaces, setAllPlaces] = useState<Place[]>([]);
@@ -173,6 +174,7 @@ function AppContent() {
           </PrivateRoute>
         }
       />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

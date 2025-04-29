@@ -1062,10 +1062,10 @@ const Map = ({
                   },
                 ],
                 gestureHandling: 'greedy',
-                fullscreenControl: true,
-                zoomControl: true,
-                streetViewControl: true,
-                mapTypeControl: true,
+                fullscreenControl: false,
+                zoomControl: false,
+                streetViewControl: false,
+                mapTypeControl: false,
               }}
             >
               <MapStatusIndicator

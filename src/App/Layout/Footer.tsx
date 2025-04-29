@@ -19,18 +19,8 @@ import React from 'react';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-white text-gray-500 p-4">
-      <div className="container mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <div className="mb-4 md:mb-0 flex flex-row items-center gap-4">
-            <h3 className="text-lg font-semibold">FamilySpot</h3>
-            <p className="text-sm text-gray-400">Encontre os melhores lugares para sua família</p>
-          </div>
-          <div className="text-sm text-gray-500">
-            <p>© {new Date().getFullYear()} FamilySpot. Todos os direitos reservados.</p>
-          </div>
-        </div>
-      </div>
+    <footer className="fixed bottom-0 right-0 p-2 text-gray-500 text-sm">
+      <p>© {new Date().getFullYear()} FamilySpot. Todos os direitos reservados.</p>
     </footer>
   );
 };

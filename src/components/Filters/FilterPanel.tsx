@@ -25,6 +25,40 @@ const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
   const { filters, setFilters, clearFilters } = useFilter();
 
   const getAmenitiesForCategory = (): AmenitiesByCategory => {
+    if (filters.category === 'all') {
+      return {
+        accessibility: [
+          { key: 'accessibility', label: 'Rampas, elevadores, sinalização' },
+          { key: 'specialNeeds', label: 'Adaptação para necessidades especiais' },
+          { key: 'accessibleTrails', label: 'Trilhas acessíveis' },
+        ],
+        structure: [
+          { key: 'waitingArea', label: 'Área de espera confortável' },
+          { key: 'supervisedActivities', label: 'Atividades com monitores' },
+          { key: 'changingTables', label: 'Banheiros com trocador' },
+          { key: 'shadedAreas', label: 'Sombra' },
+          { key: 'playground', label: 'Brinquedos infantis' },
+          { key: 'picnicArea', label: 'Área para piquenique' },
+          { key: 'tablesAndBenches', label: 'Mesas e bancos' },
+          { key: 'publicRestrooms', label: 'Banheiros públicos' },
+          { key: 'fencedArea', label: 'Área cercada' },
+          { key: 'playAreas', label: 'Área de Brincar' },
+          { key: 'highChairs', label: 'Cadeirão' },
+          { key: 'petFriendly', label: 'Pet-friendly' },
+          { key: 'nightLighting', label: 'Iluminação noturna' },
+        ],
+        transport: [
+          { key: 'parking', label: 'Estacionamento no local ou próximo' },
+          { key: 'publicTransport', label: 'Transporte público próximo' },
+        ],
+        facilities: [
+          { key: 'drinkingWater', label: 'Bebedouro' },
+          { key: 'foodNearby', label: 'Local para comer' },
+          { key: 'kidsMenu', label: 'Menu Infantil' },
+        ],
+      };
+    }
+
     switch (filters.category) {
       case 'activities':
         return {
@@ -275,7 +309,7 @@ const FilterPanel = ({ onApplyFiltersInView }: FilterPanelProps) => {
         </div>
       )}
 
-      {filters.category !== 'all' && (
+      {Object.keys(amenities).length > 0 && (
         <div className="mb-6">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Comodidades</h4>
           <div className="space-y-2">

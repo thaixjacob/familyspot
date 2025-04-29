@@ -10,7 +10,7 @@ while read line; do
     # Check if the commit message follows the `type(scope): message` format
     if ! [[ $line =~ $pattern ]]; then
         echo -e "\033[0;31mCommit message must follow the format: type(scope): message"
-        echo -e "\033[0;31mExample: feat(api): add support for new login feature"
+        echo -e "\033[0;31mExample: feat|fix|docs|style|refactor|test|chore(api): add support for new login feature"
         exit 1
     fi
     
